@@ -30,6 +30,7 @@ class FoodItem {
   final double fat;
   final double fiber;
   final String? portion;
+  final String? cookingStyle;
 
   FoodItem({
     required this.name,
@@ -39,6 +40,7 @@ class FoodItem {
     required this.fat,
     required this.fiber,
     this.portion,
+    this.cookingStyle,
   });
 
   Map<String, dynamic> toJson() => {
@@ -49,6 +51,7 @@ class FoodItem {
         'fat': fat,
         'fiber': fiber,
         'portion': portion,
+        'cooking_style': cookingStyle,
       };
 
   factory FoodItem.fromJson(Map<String, dynamic> json) => FoodItem(
@@ -59,6 +62,7 @@ class FoodItem {
         fat: (json['fat'] as num?)?.toDouble() ?? 0,
         fiber: (json['fiber'] as num?)?.toDouble() ?? 0,
         portion: json['portion'] as String?,
+        cookingStyle: json['cooking_style'] as String?,
       );
 }
 
@@ -74,6 +78,8 @@ class MealAnalysis {
   final String? imagePath;
   final DateTime timestamp;
   final String? mealType;
+  final int healthScore;
+  final String? healthTip;
 
   MealAnalysis({
     required this.id,
@@ -87,6 +93,8 @@ class MealAnalysis {
     this.imagePath,
     DateTime? timestamp,
     this.mealType,
+    this.healthScore = 0,
+    this.healthTip,
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -101,6 +109,8 @@ class MealAnalysis {
         'imagePath': imagePath,
         'timestamp': timestamp.toIso8601String(),
         'mealType': mealType,
+        'healthScore': healthScore,
+        'healthTip': healthTip,
       };
 
   factory MealAnalysis.fromJson(Map<String, dynamic> json) => MealAnalysis(
@@ -117,5 +127,7 @@ class MealAnalysis {
         imagePath: json['imagePath'] as String?,
         timestamp: DateTime.parse(json['timestamp'] as String),
         mealType: json['mealType'] as String?,
+        healthScore: (json['healthScore'] as num?)?.toInt() ?? 0,
+        healthTip: json['healthTip'] as String?,
       );
 }

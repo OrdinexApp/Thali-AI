@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../core/constants/api_config.dart';
 import '../features/history/data/models/meal_model.dart';
+import 'indian_food_db.dart';
 
 class GeminiService {
   static String get _apiKey => ApiConfig.geminiApiKey;
@@ -82,11 +83,12 @@ Adjust calorie estimates based on the cooking style:
     }
 
     final prompt = '''
-You are an expert Indian food nutritionist. Analyze this photo of an Indian meal.
+You are an expert Indian food nutritionist with deep knowledge of IFCT 2017 and NIN Hyderabad nutrition databases.
 
 ${detectedContext}The person had $rotiCount roti(s)/chapati(s) with this meal.
 
-For each food item visible, provide detailed nutritional estimates per serving.
+For each food item, provide precise nutritional estimates considering the cooking style and quantity specified.
+Cross-reference your estimates with standard Indian food composition data.
 
 Return ONLY a valid JSON object (no markdown, no code blocks) in this exact format:
 {
@@ -98,17 +100,23 @@ Return ONLY a valid JSON object (no markdown, no code blocks) in this exact form
       "carbs": 20.0,
       "fat": 3.0,
       "fiber": 2.0,
-      "portion": "1 serving (approx 100g)"
+      "portion": "1 serving (approx 100g)",
+      "cooking_style": "Home"
     }
   ],
-  "mealType": "lunch"
+  "mealType": "lunch",
+  "healthScore": 7,
+  "healthTip": "Good protein from dal. Consider reducing rice portion for fewer carbs."
 }
 
 Important:
 - Include $rotiCount roti(s) as a separate item with total calories for all $rotiCount rotis combined.
-- Be realistic with typical Indian restaurant/homemade portions.
+- Be realistic with typical Indian food portions for the specified cooking style.
 - Include every visible item: dal, sabzi, rice, roti, chutney, pickle, raita, papad, salad, etc.
-- Use accurate calorie values for Indian food preparations.
+- Use IFCT 2017 / NIN calorie values for Indian food preparations.
+- healthScore: integer 1-10 (10 = very healthy, balanced meal).
+- healthTip: one practical tip to improve this meal's nutrition.
+- cooking_style: preserve the user-confirmed cooking style for each item.
 ''';
 
     try {
@@ -118,9 +126,13 @@ Important:
         return _parseNutritionResponse(parsed, rotiCount, mealId, imagePath);
       }
     } catch (e) {
-      // Fall through to mock
+      // Fall through
     }
 
+    // Use local DB if detected items are available, otherwise fall back to mock
+    if (detectedItems != null && detectedItems.items.isNotEmpty) {
+      return _buildFromLocalDB(detectedItems, rotiCount, mealId, imagePath);
+    }
     return _getMockAnalysis(rotiCount, mealId, imagePath);
   }
 
@@ -182,9 +194,136 @@ Important:
     String mealId,
     String imagePath,
   ) {
-    final items = (data['items'] as List)
+    final rawItems = (data['items'] as List)
         .map((e) => FoodItem.fromJson(e as Map<String, dynamic>))
         .toList();
+
+    // Cross-validate with local DB: if Gemini returns 0 calories, fill from DB
+    final items = rawItems.map((item) {
+      if (item.calories > 0) return item;
+      final dbEntry = IndianFoodDB.lookup(item.name);
+      if (dbEntry == null) return item;
+      final styled = item.cookingStyle != null
+          ? IndianFoodDB.applyStyle(dbEntry, item.cookingStyle!)
+          : dbEntry;
+      return FoodItem(
+        name: item.name,
+        calories: styled.calories,
+        protein: styled.protein,
+        carbs: styled.carbs,
+        fat: styled.fat,
+        fiber: styled.fiber,
+        portion: item.portion ?? styled.portion,
+        cookingStyle: item.cookingStyle,
+      );
+    }).toList();
+
+    double totalCalories = 0, totalProtein = 0, totalCarbs = 0;
+    double totalFat = 0, totalFiber = 0;
+    for (final i in items) {
+      totalCalories += i.calories;
+      totalProtein += i.protein;
+      totalCarbs += i.carbs;
+      totalFat += i.fat;
+      totalFiber += i.fiber;
+    }
+
+    final healthScore = (data['healthScore'] as num?)?.toInt() ??
+        _calculateHealthScore(totalCalories, totalProtein, totalCarbs,
+            totalFat, totalFiber);
+    final healthTip = data['healthTip'] as String?;
+
+    return MealAnalysis(
+      id: mealId,
+      items: items,
+      totalCalories: totalCalories,
+      totalProtein: totalProtein,
+      totalCarbs: totalCarbs,
+      totalFat: totalFat,
+      totalFiber: totalFiber,
+      rotiCount: rotiCount,
+      imagePath: imagePath,
+      mealType: data['mealType'] as String? ?? 'meal',
+      healthScore: healthScore,
+      healthTip: healthTip,
+    );
+  }
+
+  int _calculateHealthScore(double cal, double pro, double carbs,
+      double fat, double fiber) {
+    int score = 5;
+    final total = pro + carbs + fat;
+    if (total <= 0) return score;
+
+    final proteinRatio = pro / total;
+    final fatRatio = fat / total;
+
+    if (proteinRatio >= 0.2) score += 1;
+    if (proteinRatio >= 0.3) score += 1;
+    if (fatRatio < 0.35) score += 1;
+    if (fiber >= 8) score += 1;
+    if (cal <= 700) score += 1;
+    if (cal > 1200) score -= 2;
+    if (fatRatio > 0.45) score -= 1;
+
+    return score.clamp(1, 10);
+  }
+
+  /// Build a full MealAnalysis from the local Indian food database
+  MealAnalysis _buildFromLocalDB(
+    DetectionResult detected,
+    int rotiCount,
+    String mealId,
+    String imagePath,
+  ) {
+    final items = <FoodItem>[];
+
+    for (final d in detected.items) {
+      final dbEntry = IndianFoodDB.lookup(d.name);
+      if (dbEntry != null) {
+        final styled = IndianFoodDB.applyStyle(dbEntry, d.cookingStyle);
+        // Parse quantity multiplier from estimatedQuantity (e.g. "2 pieces" → 2)
+        final qtyMultiplier = _parseQuantity(d.estimatedQuantity);
+        items.add(FoodItem(
+          name: d.name,
+          calories: styled.calories * qtyMultiplier,
+          protein: styled.protein * qtyMultiplier,
+          carbs: styled.carbs * qtyMultiplier,
+          fat: styled.fat * qtyMultiplier,
+          fiber: styled.fiber * qtyMultiplier,
+          portion: d.estimatedQuantity,
+          cookingStyle: d.cookingStyle,
+        ));
+      } else {
+        items.add(FoodItem(
+          name: d.name,
+          calories: 150,
+          protein: 5.0,
+          carbs: 20.0,
+          fat: 5.0,
+          fiber: 2.0,
+          portion: d.estimatedQuantity,
+          cookingStyle: d.cookingStyle,
+        ));
+      }
+    }
+
+    // Ensure roti is in the list
+    final hasRoti = items.any(
+        (i) => i.name.toLowerCase().contains('roti') || i.name.toLowerCase().contains('chapati'));
+    if (!hasRoti && rotiCount > 0) {
+      final rotiBase = IndianFoodDB.lookup('roti')!;
+      items.insert(0, FoodItem(
+        name: 'Roti',
+        calories: rotiBase.calories * rotiCount,
+        protein: rotiBase.protein * rotiCount,
+        carbs: rotiBase.carbs * rotiCount,
+        fat: rotiBase.fat * rotiCount,
+        fiber: rotiBase.fiber * rotiCount,
+        portion: '$rotiCount piece(s)',
+        cookingStyle: 'Home',
+      ));
+    }
 
     double totalCalories = 0, totalProtein = 0, totalCarbs = 0;
     double totalFat = 0, totalFiber = 0;
@@ -206,8 +345,19 @@ Important:
       totalFiber: totalFiber,
       rotiCount: rotiCount,
       imagePath: imagePath,
-      mealType: data['mealType'] as String? ?? 'meal',
+      mealType: 'meal',
+      healthScore: _calculateHealthScore(
+          totalCalories, totalProtein, totalCarbs, totalFat, totalFiber),
+      healthTip: 'Values calculated from standard Indian food database (IFCT 2017).',
     );
+  }
+
+  double _parseQuantity(String qty) {
+    final match = RegExp(r'(\d+\.?\d*)').firstMatch(qty);
+    if (match != null) {
+      return double.tryParse(match.group(1)!) ?? 1.0;
+    }
+    return 1.0;
   }
 
   DetectionResult _getMockDetection() {
@@ -242,6 +392,7 @@ Important:
         fat: 3.5 * rotiCount,
         fiber: 1.2 * rotiCount,
         portion: '$rotiCount piece(s)',
+        cookingStyle: 'Home',
       ),
       FoodItem(
         name: 'Dal Tadka',
@@ -251,6 +402,7 @@ Important:
         fat: 6.0,
         fiber: 4.5,
         portion: '1 bowl (150ml)',
+        cookingStyle: 'Home',
       ),
       FoodItem(
         name: 'Aloo Gobi',
@@ -260,6 +412,7 @@ Important:
         fat: 7.0,
         fiber: 3.5,
         portion: '1 serving (120g)',
+        cookingStyle: 'Home',
       ),
       FoodItem(
         name: 'Steamed Rice',
@@ -269,6 +422,7 @@ Important:
         fat: 0.5,
         fiber: 0.6,
         portion: '1 cup (150g)',
+        cookingStyle: 'Home',
       ),
       FoodItem(
         name: 'Raita',
@@ -278,6 +432,7 @@ Important:
         fat: 3.5,
         fiber: 0.2,
         portion: '1 small bowl (80ml)',
+        cookingStyle: 'Home',
       ),
       FoodItem(
         name: 'Pickle',
@@ -287,6 +442,7 @@ Important:
         fat: 2.5,
         fiber: 0.5,
         portion: '1 tbsp',
+        cookingStyle: 'Home',
       ),
     ];
 
@@ -311,6 +467,9 @@ Important:
       rotiCount: rotiCount,
       imagePath: imagePath,
       mealType: 'lunch',
+      healthScore: _calculateHealthScore(
+          totalCalories, totalProtein, totalCarbs, totalFat, totalFiber),
+      healthTip: 'Good protein from dal. Consider adding a green salad for more fiber.',
     );
   }
 }

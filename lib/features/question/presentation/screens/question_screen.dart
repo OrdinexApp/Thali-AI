@@ -55,11 +55,7 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
                         .fadeIn(duration: 600.ms, delay: 300.ms)
                         .scale(begin: const Offset(0.9, 0.9)),
                     const SizedBox(height: 36),
-                    NeonButton(
-                      text: 'Analyze Now',
-                      icon: Icons.auto_awesome_rounded,
-                      onPressed: _onAnalyze,
-                    ).animate()
+                    _buildAnalyzeButton(detectionState).animate()
                         .fadeIn(duration: 600.ms, delay: 400.ms)
                         .slideY(begin: 0.2, end: 0),
                     const SizedBox(height: 32),
@@ -477,7 +473,81 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
     );
   }
 
+  Widget _buildAnalyzeButton(DetectionState state) {
+    final items = state.result?.items ?? [];
+    final confirmedCount = items.where((i) => i.confirmed).length;
+    final allConfirmed = items.isEmpty || confirmedCount == items.length;
+
+    return Column(
+      children: [
+        NeonButton(
+          text: allConfirmed ? 'Analyze Now' : 'Analyze Now ($confirmedCount/${items.length} confirmed)',
+          icon: Icons.auto_awesome_rounded,
+          onPressed: _onAnalyze,
+        ),
+        if (!allConfirmed && items.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Tap items above to confirm cooking style',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textTertiary.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   void _onAnalyze() {
+    final detectionState = ref.read(detectionProvider);
+    final items = detectionState.result?.items ?? [];
+    final allConfirmed = items.isEmpty || items.every((i) => i.confirmed);
+
+    if (!allConfirmed) {
+      _showConfirmDialog();
+      return;
+    }
+
+    _startAnalysis();
+  }
+
+  void _showConfirmDialog() {
+    HapticFeedback.mediumImpact();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Unconfirmed Items',
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        content: const Text(
+          'Some items haven\'t been confirmed yet. Unconfirmed items will use default "Home" cooking style. Proceed anyway?',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Go Back', style: TextStyle(color: AppColors.textTertiary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _startAnalysis();
+            },
+            child: const Text(
+              'Analyze Anyway',
+              style: TextStyle(color: AppColors.emerald, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startAnalysis() {
     HapticFeedback.heavyImpact();
     final imagePath = ref.read(selectedImagePathProvider);
     final rotiCount = ref.read(rotiCountProvider);

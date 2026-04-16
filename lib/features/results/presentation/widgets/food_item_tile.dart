@@ -28,77 +28,193 @@ class FoodItemTile extends StatelessWidget {
     if (name.contains('salad') || name.contains('vegetable')) {
       return Icons.eco_rounded;
     }
+    if (name.contains('chicken') || name.contains('mutton') || name.contains('fish') ||
+        name.contains('egg') || name.contains('keema')) {
+      return Icons.set_meal_rounded;
+    }
+    if (name.contains('paneer')) {
+      return Icons.lunch_dining_rounded;
+    }
     return Icons.restaurant_rounded;
+  }
+
+  Color _getStyleColor(String? style) {
+    switch (style) {
+      case 'Restaurant':
+        return AppColors.warning;
+      case 'Less Oil':
+        return AppColors.neonGreen;
+      case 'Diet':
+        return AppColors.cyan;
+      default:
+        return AppColors.emerald;
+    }
+  }
+
+  IconData _getStyleIcon(String? style) {
+    switch (style) {
+      case 'Restaurant':
+        return Icons.storefront_rounded;
+      case 'Less Oil':
+        return Icons.water_drop_outlined;
+      case 'Diet':
+        return Icons.spa_rounded;
+      default:
+        return Icons.home_rounded;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final styleColor = _getStyleColor(item.cookingStyle);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: GlassCard(
         padding: const EdgeInsets.all(16),
         borderRadius: 16,
-        child: Row(
+        child: Column(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.emerald.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                _getFoodIcon(),
-                color: AppColors.emerald,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.emerald.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  if (item.portion != null) ...[
-                    const SizedBox(height: 2),
+                  child: Icon(
+                    _getFoodIcon(),
+                    color: AppColors.emerald,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (item.portion != null) ...[
+                            Text(
+                              item.portion!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textTertiary,
+                              ),
+                            ),
+                          ],
+                          if (item.cookingStyle != null) ...[
+                            if (item.portion != null)
+                              const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: styleColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(_getStyleIcon(item.cookingStyle),
+                                      size: 10, color: styleColor),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    item.cookingStyle!,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: styleColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
                     Text(
-                      item.portion!,
+                      '${item.calories.toInt()}',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.emerald,
+                      ),
+                    ),
+                    const Text(
+                      'kcal',
+                      style: TextStyle(
+                        fontSize: 11,
                         color: AppColors.textTertiary,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${item.calories.toInt()}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.emerald,
-                  ),
-                ),
-                const Text(
-                  'kcal',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textTertiary,
-                    fontWeight: FontWeight.w500,
-                  ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildMicroMacro('P', item.protein, AppColors.cyan),
+                const SizedBox(width: 8),
+                _buildMicroMacro('C', item.carbs, AppColors.warning),
+                const SizedBox(width: 8),
+                _buildMicroMacro('F', item.fat, AppColors.error),
+                const SizedBox(width: 8),
+                _buildMicroMacro('Fb', item.fiber, AppColors.neonGreen),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMicroMacro(String label, double value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          children: [
+            Text(
+              '${value.toStringAsFixed(1)}g',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 9,
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),

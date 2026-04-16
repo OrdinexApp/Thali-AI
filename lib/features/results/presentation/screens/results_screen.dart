@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import '../../../../features/history/data/models/meal_model.dart';
 import '../../../../services/providers.dart';
 import '../widgets/macro_chart.dart';
 import '../widgets/food_item_tile.dart';
+import '../widgets/health_score_card.dart';
 
 class ResultsScreen extends ConsumerStatefulWidget {
   const ResultsScreen({super.key});
@@ -74,7 +76,7 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
               .fadeIn(duration: 600.ms),
           const SizedBox(height: 12),
           const Text(
-            'AI is identifying food items\nand calculating nutrition',
+            'Calculating calories using AI + Indian\nfood nutrition database',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -121,18 +123,32 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
                 _buildAppBar()
                     .animate()
                     .fadeIn(duration: 400.ms),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
+                // Meal photo thumbnail
+                if (meal.imagePath != null)
+                  _buildMealPhoto(meal.imagePath!)
+                      .animate()
+                      .fadeIn(duration: 500.ms, delay: 50.ms)
+                      .slideY(begin: 0.05, end: 0),
+                if (meal.imagePath != null) const SizedBox(height: 20),
                 _buildCalorieHeader(meal)
                     .animate()
                     .fadeIn(duration: 600.ms, delay: 100.ms)
                     .slideY(begin: 0.1, end: 0),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                HealthScoreCard(
+                  score: meal.healthScore,
+                  tip: meal.healthTip,
+                ).animate()
+                    .fadeIn(duration: 600.ms, delay: 150.ms)
+                    .slideY(begin: 0.1, end: 0),
+                const SizedBox(height: 16),
                 MacroChart(meal: meal)
                     .animate()
                     .fadeIn(duration: 600.ms, delay: 200.ms)
                     .scale(begin: const Offset(0.95, 0.95)),
                 const SizedBox(height: 24),
-                _buildFoodItemsHeader()
+                _buildFoodItemsHeader(meal.items.length)
                     .animate()
                     .fadeIn(duration: 600.ms, delay: 300.ms),
                 const SizedBox(height: 12),
@@ -162,6 +178,10 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
+                _buildMealSummaryRow(meal)
+                    .animate()
+                    .fadeIn(duration: 500.ms, delay: 550.ms),
+                const SizedBox(height: 20),
                 NeonButton(
                   text: 'Save Meal',
                   icon: Icons.bookmark_add_rounded,
@@ -188,6 +208,72 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMealPhoto(String imagePath) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        height: 160,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.file(File(imagePath), fit: BoxFit.cover),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.6),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 12,
+              left: 14,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.emerald.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.emerald.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            color: AppColors.emerald, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'Analyzed',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.emerald,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -330,12 +416,13 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
     );
   }
 
-  Widget _buildFoodItemsHeader() {
-    return const Row(
+  Widget _buildFoodItemsHeader(int count) {
+    return Row(
       children: [
-        Icon(Icons.restaurant_menu_rounded, color: AppColors.emerald, size: 20),
-        SizedBox(width: 8),
-        Text(
+        const Icon(Icons.restaurant_menu_rounded,
+            color: AppColors.emerald, size: 20),
+        const SizedBox(width: 8),
+        const Text(
           'Food Items Detected',
           style: TextStyle(
             fontSize: 17,
@@ -343,8 +430,83 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
             color: AppColors.textPrimary,
           ),
         ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.emerald.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '$count items',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.emerald,
+            ),
+          ),
+        ),
       ],
     );
+  }
+
+  Widget _buildMealSummaryRow(MealAnalysis meal) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      borderRadius: 14,
+      child: Row(
+        children: [
+          _buildSummaryChip(
+            Icons.bakery_dining_rounded,
+            '${meal.rotiCount} Rotis',
+            AppColors.warning,
+          ),
+          const SizedBox(width: 12),
+          _buildSummaryChip(
+            Icons.access_time_rounded,
+            meal.mealType?.toUpperCase() ?? 'MEAL',
+            AppColors.cyan,
+          ),
+          const SizedBox(width: 12),
+          _buildSummaryChip(
+            Icons.calendar_today_rounded,
+            _formatDate(meal.timestamp),
+            AppColors.textSecondary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryChip(IconData icon, String text, Color color) {
+    return Expanded(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${dt.day} ${months[dt.month - 1]}';
   }
 
   Widget _buildErrorState(String error) {
@@ -409,7 +571,8 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
         SnackBar(
           content: const Row(
             children: [
-              Icon(Icons.check_circle_rounded, color: AppColors.emerald, size: 20),
+              Icon(Icons.check_circle_rounded,
+                  color: AppColors.emerald, size: 20),
               SizedBox(width: 12),
               Text(
                 'Meal saved successfully!',
