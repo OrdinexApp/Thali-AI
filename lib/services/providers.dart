@@ -55,6 +55,14 @@ class DetectionNotifier extends StateNotifier<DetectionState> {
     }
   }
 
+  void updateItem(int index, DetectedItem updatedItem) {
+    if (state.result == null) return;
+    state = DetectionState(
+      status: state.status,
+      result: state.result!.copyWithItem(index, updatedItem),
+    );
+  }
+
   void reset() {
     state = const DetectionState();
   }

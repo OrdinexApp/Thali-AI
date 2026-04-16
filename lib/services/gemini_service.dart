@@ -65,11 +65,18 @@ Be accurate with Indian dishes.''';
     String detectedContext = '';
     if (detectedItems != null && detectedItems.items.isNotEmpty) {
       final itemsList = detectedItems.items
-          .map((i) => '- ${i.name} (${i.estimatedQuantity})')
+          .map((i) =>
+              '- ${i.name} (${i.estimatedQuantity}, ${i.cookingStyle} style)')
           .join('\n');
       detectedContext = '''
-Previously detected items in this meal:
+Previously detected items in this meal (user-confirmed):
 $itemsList
+
+Adjust calorie estimates based on the cooking style:
+- "Home" = normal homemade with moderate oil/ghee
+- "Restaurant" = richer, more oil/butter/cream
+- "Less Oil" = lighter preparation, less fat
+- "Diet" = minimal oil, boiled/steamed where possible
 
 ''';
     }
@@ -312,8 +319,29 @@ Important:
 class DetectedItem {
   final String name;
   final String estimatedQuantity;
+  final String cookingStyle;
+  final bool confirmed;
 
-  DetectedItem({required this.name, required this.estimatedQuantity});
+  DetectedItem({
+    required this.name,
+    required this.estimatedQuantity,
+    this.cookingStyle = 'Home',
+    this.confirmed = false,
+  });
+
+  DetectedItem copyWith({
+    String? name,
+    String? estimatedQuantity,
+    String? cookingStyle,
+    bool? confirmed,
+  }) {
+    return DetectedItem(
+      name: name ?? this.name,
+      estimatedQuantity: estimatedQuantity ?? this.estimatedQuantity,
+      cookingStyle: cookingStyle ?? this.cookingStyle,
+      confirmed: confirmed ?? this.confirmed,
+    );
+  }
 
   factory DetectedItem.fromJson(Map<String, dynamic> json) => DetectedItem(
         name: json['name'] as String? ?? 'Unknown',
@@ -323,6 +351,7 @@ class DetectedItem {
   Map<String, dynamic> toJson() => {
         'name': name,
         'estimated_quantity': estimatedQuantity,
+        'cooking_style': cookingStyle,
       };
 }
 
@@ -331,4 +360,10 @@ class DetectionResult {
   final List<String> suggestedLabels;
 
   DetectionResult({required this.items, required this.suggestedLabels});
+
+  DetectionResult copyWithItem(int index, DetectedItem item) {
+    final newItems = List<DetectedItem>.from(items);
+    newItems[index] = item;
+    return DetectionResult(items: newItems, suggestedLabels: suggestedLabels);
+  }
 }

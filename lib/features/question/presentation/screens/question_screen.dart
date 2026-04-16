@@ -9,6 +9,8 @@ import '../../../../core/widgets/animated_gradient_background.dart';
 import '../../../../core/widgets/glass_card.dart';
 import '../../../../core/widgets/neon_button.dart';
 import '../../../../services/providers.dart';
+import '../widgets/annotated_food_image.dart';
+import '../widgets/item_edit_sheet.dart';
 
 class QuestionScreen extends ConsumerStatefulWidget {
   const QuestionScreen({super.key});
@@ -23,7 +25,6 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
     final imagePath = ref.watch(selectedImagePathProvider);
     final rotiCount = ref.watch(rotiCountProvider);
     final detectionState = ref.watch(detectionProvider);
-    final size = MediaQuery.of(context).size;
 
     return Scaffold(
       body: AnimatedGradientBackground(
@@ -39,27 +40,21 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
                     _buildAppBar()
                         .animate()
                         .fadeIn(duration: 400.ms),
-                    const SizedBox(height: 24),
-                    _buildImagePreview(imagePath, size)
-                        .animate()
-                        .fadeIn(duration: 600.ms, delay: 100.ms)
-                        .slideY(begin: 0.1, end: 0),
                     const SizedBox(height: 20),
-                    _buildDetectedItems(detectionState)
-                        .animate()
-                        .fadeIn(duration: 600.ms, delay: 150.ms)
-                        .slideY(begin: 0.1, end: 0),
+                    _buildImageSection(imagePath, detectionState),
+                    const SizedBox(height: 20),
+                    _buildDetectedItemsList(detectionState),
                     const SizedBox(height: 28),
                     _buildQuestion()
                         .animate()
                         .fadeIn(duration: 600.ms, delay: 200.ms)
                         .slideY(begin: 0.1, end: 0),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
                     _buildRotiSelector(rotiCount)
                         .animate()
                         .fadeIn(duration: 600.ms, delay: 300.ms)
                         .scale(begin: const Offset(0.9, 0.9)),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 36),
                     NeonButton(
                       text: 'Analyze Now',
                       icon: Icons.auto_awesome_rounded,
@@ -111,24 +106,55 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
     );
   }
 
-  Widget _buildImagePreview(String? imagePath, Size size) {
+  /// Shows annotated image with labels when detection is done, plain image otherwise
+  Widget _buildImageSection(String? imagePath, DetectionState detectionState) {
+    if (imagePath == null) {
+      return Container(
+        height: 200,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: const Center(
+          child: Icon(Icons.image_rounded, size: 48, color: AppColors.textTertiary),
+        ),
+      );
+    }
+
+    // Show annotated image when items are detected
+    if (detectionState.status == DetectionStatus.success &&
+        detectionState.result != null &&
+        detectionState.result!.items.isNotEmpty) {
+      return AnnotatedFoodImage(
+        imagePath: imagePath,
+        items: detectionState.result!.items,
+        onItemTap: (index) => _showEditSheet(index, detectionState),
+      ).animate()
+          .fadeIn(duration: 600.ms, delay: 100.ms)
+          .slideY(begin: 0.1, end: 0);
+    }
+
+    // Plain image with loading/status overlay
+    return _buildPlainImagePreview(imagePath, detectionState)
+        .animate()
+        .fadeIn(duration: 600.ms, delay: 100.ms)
+        .slideY(begin: 0.1, end: 0);
+  }
+
+  Widget _buildPlainImagePreview(String imagePath, DetectionState state) {
+    final size = MediaQuery.of(context).size;
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: Stack(
         children: [
           Container(
             width: double.infinity,
-            height: size.height * 0.22,
+            height: size.height * 0.28,
             decoration: BoxDecoration(
               color: AppColors.surfaceLight,
               borderRadius: BorderRadius.circular(24),
             ),
-            child: imagePath != null
-                ? Image.file(File(imagePath), fit: BoxFit.cover)
-                : const Center(
-                    child: Icon(Icons.image_rounded,
-                        size: 48, color: AppColors.textTertiary),
-                  ),
+            child: Image.file(File(imagePath), fit: BoxFit.cover),
           ),
           Positioned(
             bottom: 0,
@@ -138,24 +164,44 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.3),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.check_circle_rounded,
-                          color: AppColors.emerald, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Photo captured successfully',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
+                      if (state.status == DetectionStatus.loading) ...[
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.emerald.withValues(alpha: 0.8),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'AI is detecting food items...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ] else ...[
+                        const Icon(Icons.check_circle_rounded,
+                            color: AppColors.emerald, size: 18),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Photo captured successfully',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -167,154 +213,150 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
     );
   }
 
-  Widget _buildDetectedItems(DetectionState state) {
-    if (state.status == DetectionStatus.loading) {
-      return GlassCard(
-        padding: const EdgeInsets.all(16),
-        borderRadius: 16,
-        child: Row(
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.emerald.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'AI is detecting food items...',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      );
+  /// List of detected items below the image — tappable to edit
+  Widget _buildDetectedItemsList(DetectionState state) {
+    if (state.status != DetectionStatus.success ||
+        state.result == null ||
+        state.result!.items.isEmpty) {
+      return const SizedBox.shrink();
     }
 
-    if (state.status == DetectionStatus.success && state.result != null) {
-      final items = state.result!.items;
-      return GlassCard(
-        padding: const EdgeInsets.all(16),
-        borderRadius: 16,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: AppColors.emerald.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.auto_awesome_rounded,
-                      color: AppColors.emerald, size: 16),
+    final items = state.result!.items;
+    final confirmedCount = items.where((i) => i.confirmed).length;
+
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: 16,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: AppColors.emerald.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(width: 10),
-                const Text(
-                  'Detected Items',
+                child: const Icon(Icons.touch_app_rounded,
+                    color: AppColors.emerald, size: 15),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Tap items to confirm details',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: confirmedCount == items.length
+                      ? AppColors.emerald.withValues(alpha: 0.15)
+                      : AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$confirmedCount/${items.length}',
+                  style: TextStyle(
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: confirmedCount == items.length
+                        ? AppColors.emerald
+                        : AppColors.textTertiary,
                   ),
                 ),
-                const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(items.length, (i) {
+              final item = items[i];
+              return GestureDetector(
+                onTap: () => _showEditSheet(i, state),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.emerald.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${items.length} items',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.emerald,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: items.map((item) {
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceLight,
+                    color: item.confirmed
+                        ? AppColors.emerald.withValues(alpha: 0.12)
+                        : AppColors.surfaceLight,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: AppColors.emerald.withValues(alpha: 0.15),
+                      color: item.confirmed
+                          ? AppColors.emerald.withValues(alpha: 0.5)
+                          : AppColors.glassBorder,
+                      width: item.confirmed ? 1.2 : 0.5,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.restaurant_rounded,
-                          color: AppColors.emerald, size: 14),
+                      Icon(
+                        item.confirmed
+                            ? Icons.check_circle_rounded
+                            : Icons.restaurant_rounded,
+                        color: item.confirmed
+                            ? AppColors.emerald
+                            : AppColors.textTertiary,
+                        size: 14,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         item.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: item.confirmed
+                              ? AppColors.emerald
+                              : AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        item.estimatedQuantity,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textTertiary,
+                      if (item.confirmed) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          item.cookingStyle,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.cyan.withValues(alpha: 0.8),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (state.status == DetectionStatus.error) {
-      return GlassCard(
-        padding: const EdgeInsets.all(16),
-        borderRadius: 16,
-        child: Row(
-          children: [
-            Icon(Icons.info_outline_rounded,
-                color: AppColors.warning.withValues(alpha: 0.7), size: 18),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Could not auto-detect items. No worries — full analysis will run next!',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textTertiary,
                 ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+              );
+            }),
+          ),
+        ],
+      ),
+    ).animate()
+        .fadeIn(duration: 500.ms, delay: 150.ms)
+        .slideY(begin: 0.05, end: 0);
+  }
 
-    return const SizedBox.shrink();
+  void _showEditSheet(int index, DetectionState state) {
+    if (state.result == null) return;
+    final item = state.result!.items[index];
+
+    ItemEditSheet.show(
+      context,
+      item: item,
+      onConfirm: (updated) {
+        ref.read(detectionProvider.notifier).updateItem(index, updated);
+      },
+    );
   }
 
   Widget _buildQuestion() {
