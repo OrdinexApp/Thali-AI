@@ -22,45 +22,56 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
   Widget build(BuildContext context) {
     final imagePath = ref.watch(selectedImagePathProvider);
     final rotiCount = ref.watch(rotiCountProvider);
+    final detectionState = ref.watch(detectionProvider);
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
       body: AnimatedGradientBackground(
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
-                _buildAppBar()
-                    .animate()
-                    .fadeIn(duration: 400.ms),
-                const SizedBox(height: 24),
-                _buildImagePreview(imagePath, size)
-                    .animate()
-                    .fadeIn(duration: 600.ms, delay: 100.ms)
-                    .slideY(begin: 0.1, end: 0),
-                const SizedBox(height: 32),
-                _buildQuestion()
-                    .animate()
-                    .fadeIn(duration: 600.ms, delay: 200.ms)
-                    .slideY(begin: 0.1, end: 0),
-                const SizedBox(height: 24),
-                _buildRotiSelector(rotiCount)
-                    .animate()
-                    .fadeIn(duration: 600.ms, delay: 300.ms)
-                    .scale(begin: const Offset(0.9, 0.9)),
-                const Spacer(),
-                NeonButton(
-                  text: 'Analyze Now',
-                  icon: Icons.auto_awesome_rounded,
-                  onPressed: _onAnalyze,
-                ).animate()
-                    .fadeIn(duration: 600.ms, delay: 400.ms)
-                    .slideY(begin: 0.2, end: 0),
-                const SizedBox(height: 32),
-              ],
-            ),
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    const SizedBox(height: 16),
+                    _buildAppBar()
+                        .animate()
+                        .fadeIn(duration: 400.ms),
+                    const SizedBox(height: 24),
+                    _buildImagePreview(imagePath, size)
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 100.ms)
+                        .slideY(begin: 0.1, end: 0),
+                    const SizedBox(height: 20),
+                    _buildDetectedItems(detectionState)
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 150.ms)
+                        .slideY(begin: 0.1, end: 0),
+                    const SizedBox(height: 28),
+                    _buildQuestion()
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 200.ms)
+                        .slideY(begin: 0.1, end: 0),
+                    const SizedBox(height: 24),
+                    _buildRotiSelector(rotiCount)
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 300.ms)
+                        .scale(begin: const Offset(0.9, 0.9)),
+                    const SizedBox(height: 40),
+                    NeonButton(
+                      text: 'Analyze Now',
+                      icon: Icons.auto_awesome_rounded,
+                      onPressed: _onAnalyze,
+                    ).animate()
+                        .fadeIn(duration: 600.ms, delay: 400.ms)
+                        .slideY(begin: 0.2, end: 0),
+                    const SizedBox(height: 32),
+                  ]),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -107,22 +118,16 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
         children: [
           Container(
             width: double.infinity,
-            height: size.height * 0.25,
+            height: size.height * 0.22,
             decoration: BoxDecoration(
               color: AppColors.surfaceLight,
               borderRadius: BorderRadius.circular(24),
             ),
             child: imagePath != null
-                ? Image.file(
-                    File(imagePath),
-                    fit: BoxFit.cover,
-                  )
+                ? Image.file(File(imagePath), fit: BoxFit.cover)
                 : const Center(
-                    child: Icon(
-                      Icons.image_rounded,
-                      size: 48,
-                      color: AppColors.textTertiary,
-                    ),
+                    child: Icon(Icons.image_rounded,
+                        size: 48, color: AppColors.textTertiary),
                   ),
           ),
           Positioned(
@@ -133,20 +138,15 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.3),
                   ),
                   child: const Row(
                     children: [
-                      Icon(
-                        Icons.check_circle_rounded,
-                        color: AppColors.emerald,
-                        size: 18,
-                      ),
+                      Icon(Icons.check_circle_rounded,
+                          color: AppColors.emerald, size: 18),
                       SizedBox(width: 8),
                       Text(
                         'Photo captured successfully',
@@ -165,6 +165,156 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildDetectedItems(DetectionState state) {
+    if (state.status == DetectionStatus.loading) {
+      return GlassCard(
+        padding: const EdgeInsets.all(16),
+        borderRadius: 16,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.emerald.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'AI is detecting food items...',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (state.status == DetectionStatus.success && state.result != null) {
+      final items = state.result!.items;
+      return GlassCard(
+        padding: const EdgeInsets.all(16),
+        borderRadius: 16,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.emerald.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.auto_awesome_rounded,
+                      color: AppColors.emerald, size: 16),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'Detected Items',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.emerald.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${items.length} items',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.emerald,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: items.map((item) {
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppColors.emerald.withValues(alpha: 0.15),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.restaurant_rounded,
+                          color: AppColors.emerald, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        item.estimatedQuantity,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (state.status == DetectionStatus.error) {
+      return GlassCard(
+        padding: const EdgeInsets.all(16),
+        borderRadius: 16,
+        child: Row(
+          children: [
+            Icon(Icons.info_outline_rounded,
+                color: AppColors.warning.withValues(alpha: 0.7), size: 18),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Could not auto-detect items. No worries — full analysis will run next!',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _buildQuestion() {
@@ -289,11 +439,13 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
     HapticFeedback.heavyImpact();
     final imagePath = ref.read(selectedImagePathProvider);
     final rotiCount = ref.read(rotiCountProvider);
+    final detectionState = ref.read(detectionProvider);
 
     if (imagePath != null) {
       ref.read(analysisProvider.notifier).analyzeImage(
             imagePath: imagePath,
             rotiCount: rotiCount,
+            detectedItems: detectionState.result,
           );
       Navigator.pushNamed(context, '/results');
     }

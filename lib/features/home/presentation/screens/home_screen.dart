@@ -29,10 +29,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       maxWidth: 1200,
     );
     if (photo != null && mounted) {
-      ref.read(selectedImagePathProvider.notifier).state = photo.path;
-      ref.read(rotiCountProvider.notifier).state = 2;
-      ref.read(analysisProvider.notifier).reset();
-      Navigator.pushNamed(context, '/question');
+      _onPhotoPicked(photo.path);
     }
   }
 
@@ -44,11 +41,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       maxWidth: 1200,
     );
     if (photo != null && mounted) {
-      ref.read(selectedImagePathProvider.notifier).state = photo.path;
-      ref.read(rotiCountProvider.notifier).state = 2;
-      ref.read(analysisProvider.notifier).reset();
-      Navigator.pushNamed(context, '/question');
+      _onPhotoPicked(photo.path);
     }
+  }
+
+  void _onPhotoPicked(String path) {
+    ref.read(selectedImagePathProvider.notifier).state = path;
+    ref.read(rotiCountProvider.notifier).state = 2;
+    ref.read(analysisProvider.notifier).reset();
+    ref.read(detectionProvider.notifier).reset();
+    // Fire off Step 1 detection in the background
+    ref.read(detectionProvider.notifier).detectItems(path);
+    Navigator.pushNamed(context, '/question');
   }
 
   @override

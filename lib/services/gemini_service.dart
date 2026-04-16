@@ -1,28 +1,85 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../core/constants/api_config.dart';
 import '../features/history/data/models/meal_model.dart';
 
 class GeminiService {
-  // Replace with your actual API key
-  static const String _apiKey = 'YOUR_GEMINI_API_KEY';
-  static const String _baseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  static String get _apiKey => ApiConfig.geminiApiKey;
+  static String get _baseUrl => ApiConfig.geminiBaseUrl;
 
+  /// Step 1: Detect food items from the photo using the exact prompt
+  Future<DetectionResult> detectFoodItems(String imagePath) async {
+    final imageBytes = await File(imagePath).readAsBytes();
+    final base64Image = base64Encode(imageBytes);
+
+    const prompt = '''
+You are an expert Indian food nutritionist. Analyze this photo of a meal. Detect all major items on the plate.
+
+Return the result in this exact JSON format only:
+
+{
+  "items": [
+    {"name": "Paneer Butter Masala", "estimated_quantity": "1 bowl"},
+    {"name": "Dal Tadka", "estimated_quantity": "1 bowl"},
+    {"name": "Rice", "estimated_quantity": "1 cup"},
+    {"name": "Roti", "estimated_quantity": "2 pieces"}
+  ],
+  "suggested_labels": ["Paneer Butter Masala", "Dal Tadka", "Rice", "Roti"]
+}
+
+Be accurate with Indian dishes.''';
+
+    try {
+      final response = await _callGemini(prompt, base64Image);
+      if (response != null) {
+        final parsed = _extractJson(response);
+        final items = (parsed['items'] as List?)
+                ?.map((e) => DetectedItem.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [];
+        final labels = (parsed['suggested_labels'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            items.map((e) => e.name).toList();
+
+        return DetectionResult(items: items, suggestedLabels: labels);
+      }
+    } catch (e) {
+      // Fall through to mock
+    }
+
+    return _getMockDetection();
+  }
+
+  /// Step 2: Get full nutritional breakdown including roti count
   Future<MealAnalysis> analyzeThaliImage({
     required String imagePath,
     required int rotiCount,
     required String mealId,
+    DetectionResult? detectedItems,
   }) async {
     final imageBytes = await File(imagePath).readAsBytes();
     final base64Image = base64Encode(imageBytes);
 
+    String detectedContext = '';
+    if (detectedItems != null && detectedItems.items.isNotEmpty) {
+      final itemsList = detectedItems.items
+          .map((i) => '- ${i.name} (${i.estimatedQuantity})')
+          .join('\n');
+      detectedContext = '''
+Previously detected items in this meal:
+$itemsList
+
+''';
+    }
+
     final prompt = '''
-Analyze this Indian thali/food image and provide a detailed nutritional breakdown.
+You are an expert Indian food nutritionist. Analyze this photo of an Indian meal.
 
-The person had $rotiCount roti(s)/chapati(s) with this meal.
+${detectedContext}The person had $rotiCount roti(s)/chapati(s) with this meal.
 
-Please identify each food item visible in the thali and provide estimated nutritional information.
+For each food item visible, provide detailed nutritional estimates per serving.
 
 Return ONLY a valid JSON object (no markdown, no code blocks) in this exact format:
 {
@@ -40,56 +97,79 @@ Return ONLY a valid JSON object (no markdown, no code blocks) in this exact form
   "mealType": "lunch"
 }
 
-Include the $rotiCount roti(s) as a separate item in the items list.
-Be realistic with Indian food portions and calorie estimates.
-Include all visible items: dal, sabzi, rice, roti, chutney, pickle, raita, etc.
+Important:
+- Include $rotiCount roti(s) as a separate item with total calories for all $rotiCount rotis combined.
+- Be realistic with typical Indian restaurant/homemade portions.
+- Include every visible item: dal, sabzi, rice, roti, chutney, pickle, raita, papad, salad, etc.
+- Use accurate calorie values for Indian food preparations.
 ''';
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl?key=$_apiKey'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'contents': [
-            {
-              'parts': [
-                {'text': prompt},
-                {
-                  'inline_data': {
-                    'mime_type': 'image/jpeg',
-                    'data': base64Image,
-                  }
-                }
-              ]
-            }
-          ],
-          'generationConfig': {
-            'temperature': 0.3,
-            'maxOutputTokens': 2048,
-          }
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final text = data['candidates'][0]['content']['parts'][0]['text'] as String;
-
-        final cleanedJson = text
-            .replaceAll('```json', '')
-            .replaceAll('```', '')
-            .trim();
-        final parsed = jsonDecode(cleanedJson) as Map<String, dynamic>;
-
-        return _parseResponse(parsed, rotiCount, mealId, imagePath);
-      } else {
-        return _getMockAnalysis(rotiCount, mealId, imagePath);
+      final response = await _callGemini(prompt, base64Image);
+      if (response != null) {
+        final parsed = _extractJson(response);
+        return _parseNutritionResponse(parsed, rotiCount, mealId, imagePath);
       }
     } catch (e) {
-      return _getMockAnalysis(rotiCount, mealId, imagePath);
+      // Fall through to mock
     }
+
+    return _getMockAnalysis(rotiCount, mealId, imagePath);
   }
 
-  MealAnalysis _parseResponse(
+  Future<String?> _callGemini(String prompt, String base64Image) async {
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl?key=$_apiKey'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'contents': [
+              {
+                'parts': [
+                  {'text': prompt},
+                  {
+                    'inline_data': {
+                      'mime_type': 'image/jpeg',
+                      'data': base64Image,
+                    }
+                  }
+                ]
+              }
+            ],
+            'generationConfig': {
+              'temperature': 0.3,
+              'maxOutputTokens': 4096,
+            }
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['candidates']?[0]?['content']?['parts']?[0]?['text']
+          as String?;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _extractJson(String text) {
+    var cleaned = text.trim();
+    // Strip markdown code fences if present
+    cleaned = cleaned.replaceAll(RegExp(r'```json\s*'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'```\s*'), '');
+    cleaned = cleaned.trim();
+
+    // Find the first { and last } to extract JSON object
+    final start = cleaned.indexOf('{');
+    final end = cleaned.lastIndexOf('}');
+    if (start != -1 && end != -1 && end > start) {
+      cleaned = cleaned.substring(start, end + 1);
+    }
+
+    return jsonDecode(cleaned) as Map<String, dynamic>;
+  }
+
+  MealAnalysis _parseNutritionResponse(
     Map<String, dynamic> data,
     int rotiCount,
     String mealId,
@@ -99,11 +179,15 @@ Include all visible items: dal, sabzi, rice, roti, chutney, pickle, raita, etc.
         .map((e) => FoodItem.fromJson(e as Map<String, dynamic>))
         .toList();
 
-    final totalCalories = items.fold(0.0, (sum, i) => sum + i.calories);
-    final totalProtein = items.fold(0.0, (sum, i) => sum + i.protein);
-    final totalCarbs = items.fold(0.0, (sum, i) => sum + i.carbs);
-    final totalFat = items.fold(0.0, (sum, i) => sum + i.fat);
-    final totalFiber = items.fold(0.0, (sum, i) => sum + i.fiber);
+    double totalCalories = 0, totalProtein = 0, totalCarbs = 0;
+    double totalFat = 0, totalFiber = 0;
+    for (final i in items) {
+      totalCalories += i.calories;
+      totalProtein += i.protein;
+      totalCarbs += i.carbs;
+      totalFat += i.fat;
+      totalFiber += i.fiber;
+    }
 
     return MealAnalysis(
       id: mealId,
@@ -119,7 +203,29 @@ Include all visible items: dal, sabzi, rice, roti, chutney, pickle, raita, etc.
     );
   }
 
-  MealAnalysis _getMockAnalysis(int rotiCount, String mealId, String imagePath) {
+  DetectionResult _getMockDetection() {
+    return DetectionResult(
+      items: [
+        DetectedItem(name: 'Dal Tadka', estimatedQuantity: '1 bowl'),
+        DetectedItem(name: 'Aloo Gobi', estimatedQuantity: '1 serving'),
+        DetectedItem(name: 'Steamed Rice', estimatedQuantity: '1 cup'),
+        DetectedItem(name: 'Roti', estimatedQuantity: '2 pieces'),
+        DetectedItem(name: 'Raita', estimatedQuantity: '1 small bowl'),
+        DetectedItem(name: 'Pickle', estimatedQuantity: '1 tbsp'),
+      ],
+      suggestedLabels: [
+        'Dal Tadka',
+        'Aloo Gobi',
+        'Steamed Rice',
+        'Roti',
+        'Raita',
+        'Pickle',
+      ],
+    );
+  }
+
+  MealAnalysis _getMockAnalysis(
+      int rotiCount, String mealId, String imagePath) {
     final items = [
       FoodItem(
         name: 'Roti',
@@ -177,11 +283,15 @@ Include all visible items: dal, sabzi, rice, roti, chutney, pickle, raita, etc.
       ),
     ];
 
-    final totalCalories = items.fold(0.0, (sum, i) => sum + i.calories);
-    final totalProtein = items.fold(0.0, (sum, i) => sum + i.protein);
-    final totalCarbs = items.fold(0.0, (sum, i) => sum + i.carbs);
-    final totalFat = items.fold(0.0, (sum, i) => sum + i.fat);
-    final totalFiber = items.fold(0.0, (sum, i) => sum + i.fiber);
+    double totalCalories = 0, totalProtein = 0, totalCarbs = 0;
+    double totalFat = 0, totalFiber = 0;
+    for (final i in items) {
+      totalCalories += i.calories;
+      totalProtein += i.protein;
+      totalCarbs += i.carbs;
+      totalFat += i.fat;
+      totalFiber += i.fiber;
+    }
 
     return MealAnalysis(
       id: mealId,
@@ -196,4 +306,29 @@ Include all visible items: dal, sabzi, rice, roti, chutney, pickle, raita, etc.
       mealType: 'lunch',
     );
   }
+}
+
+/// Result from the initial food detection step
+class DetectedItem {
+  final String name;
+  final String estimatedQuantity;
+
+  DetectedItem({required this.name, required this.estimatedQuantity});
+
+  factory DetectedItem.fromJson(Map<String, dynamic> json) => DetectedItem(
+        name: json['name'] as String? ?? 'Unknown',
+        estimatedQuantity: json['estimated_quantity'] as String? ?? '1 serving',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'estimated_quantity': estimatedQuantity,
+      };
+}
+
+class DetectionResult {
+  final List<DetectedItem> items;
+  final List<String> suggestedLabels;
+
+  DetectionResult({required this.items, required this.suggestedLabels});
 }

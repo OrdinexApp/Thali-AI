@@ -3,7 +3,6 @@ import '../features/history/data/models/meal_model.dart';
 import '../features/history/data/repositories/meal_repository.dart';
 import 'gemini_service.dart';
 
-// Repository & Service providers
 final mealRepositoryProvider = Provider<MealRepository>((ref) {
   return MealRepository();
 });
@@ -12,13 +11,62 @@ final geminiServiceProvider = Provider<GeminiService>((ref) {
   return GeminiService();
 });
 
-// Image path state
 final selectedImagePathProvider = StateProvider<String?>((ref) => null);
 
-// Roti count state
 final rotiCountProvider = StateProvider<int>((ref) => 2);
 
-// Analysis state
+/// Holds the detected items from Step 1 (photo → Gemini detection)
+final detectedItemsProvider = StateProvider<DetectionResult?>((ref) => null);
+
+// --- Detection state (Step 1: detect food items from photo) ---
+
+enum DetectionStatus { idle, loading, success, error }
+
+class DetectionState {
+  final DetectionStatus status;
+  final DetectionResult? result;
+  final String? error;
+
+  const DetectionState({
+    this.status = DetectionStatus.idle,
+    this.result,
+    this.error,
+  });
+}
+
+class DetectionNotifier extends StateNotifier<DetectionState> {
+  final GeminiService _geminiService;
+
+  DetectionNotifier(this._geminiService) : super(const DetectionState());
+
+  Future<void> detectItems(String imagePath) async {
+    state = const DetectionState(status: DetectionStatus.loading);
+    try {
+      final result = await _geminiService.detectFoodItems(imagePath);
+      state = DetectionState(
+        status: DetectionStatus.success,
+        result: result,
+      );
+    } catch (e) {
+      state = DetectionState(
+        status: DetectionStatus.error,
+        error: e.toString(),
+      );
+    }
+  }
+
+  void reset() {
+    state = const DetectionState();
+  }
+}
+
+final detectionProvider =
+    StateNotifierProvider<DetectionNotifier, DetectionState>((ref) {
+  return DetectionNotifier(ref.watch(geminiServiceProvider));
+});
+
+// --- Analysis state (Step 2: full nutrition breakdown) ---
+
 enum AnalysisStatus { idle, loading, success, error }
 
 class AnalysisState {
@@ -31,18 +79,6 @@ class AnalysisState {
     this.result,
     this.error,
   });
-
-  AnalysisState copyWith({
-    AnalysisStatus? status,
-    MealAnalysis? result,
-    String? error,
-  }) {
-    return AnalysisState(
-      status: status ?? this.status,
-      result: result ?? this.result,
-      error: error ?? this.error,
-    );
-  }
 }
 
 class AnalysisNotifier extends StateNotifier<AnalysisState> {
@@ -55,8 +91,9 @@ class AnalysisNotifier extends StateNotifier<AnalysisState> {
   Future<void> analyzeImage({
     required String imagePath,
     required int rotiCount,
+    DetectionResult? detectedItems,
   }) async {
-    state = state.copyWith(status: AnalysisStatus.loading);
+    state = const AnalysisState(status: AnalysisStatus.loading);
 
     try {
       final mealId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -64,6 +101,7 @@ class AnalysisNotifier extends StateNotifier<AnalysisState> {
         imagePath: imagePath,
         rotiCount: rotiCount,
         mealId: mealId,
+        detectedItems: detectedItems,
       );
       state = AnalysisState(
         status: AnalysisStatus.success,
@@ -96,7 +134,8 @@ final analysisProvider =
   );
 });
 
-// Meal history
+// --- Meal history providers ---
+
 final mealHistoryProvider = FutureProvider<List<MealAnalysis>>((ref) async {
   final repo = ref.watch(mealRepositoryProvider);
   return repo.getAllMeals();
