@@ -181,7 +181,7 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
                         const SizedBox(width: 10),
                         const Expanded(
                           child: Text(
-                            'AI is detecting food items...',
+                            'Detecting food items...',
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.white,
@@ -195,7 +195,7 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
-                            'AI unavailable — add items manually',
+                            'Detection unavailable — add manually',
                             style: TextStyle(
                               fontSize: 13,
                               color: AppColors.warning,
@@ -227,7 +227,7 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
     );
   }
 
-  /// Shows API status: success from Gemini, error with reason, or retry option
+  /// Shows detection status banner
   Widget _buildApiStatusBanner(DetectionState state) {
     if (state.status == DetectionStatus.loading) {
       return const SizedBox.shrink();
@@ -293,7 +293,7 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
                               color: AppColors.cyan, size: 16),
                           SizedBox(width: 6),
                           Text(
-                            'Retry AI',
+                            'Retry',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -359,7 +359,7 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
             const SizedBox(width: 8),
             const Expanded(
               child: Text(
-                'Detected by Gemini AI',
+                'Items detected',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,

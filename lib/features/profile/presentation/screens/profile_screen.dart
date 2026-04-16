@@ -253,7 +253,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _buildDivider(),
           _buildSettingItem(
             icon: Icons.key_rounded,
-            label: 'Gemini API Key',
+            label: 'API Key',
             trailing: 'Set up',
             color: AppColors.neonGreen,
           ),
@@ -358,7 +358,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Indian Food Calorie Tracker powered by Google Gemini AI. Scan your thali, track your nutrition.',
+            'Indian Food Calorie Tracker. Scan your thali, track your nutrition with AI-powered analysis.',
             style: TextStyle(
               fontSize: 13,
               color: AppColors.textTertiary,

@@ -36,21 +36,32 @@ class GeminiService {
     final base64Image = base64Encode(imageBytes);
 
     const prompt = '''
-You are an expert Indian food nutritionist. Analyze this photo of a meal. Detect all major items on the plate.
+You are an expert Indian food nutritionist. Carefully analyze this photo and detect EVERY distinct food item visible.
 
-Return the result in this exact JSON format only:
+For each item, estimate its CENTER position in the image as x,y fractions where:
+- x: 0.0 = left edge, 0.5 = center, 1.0 = right edge
+- y: 0.0 = top edge, 0.5 = center, 1.0 = bottom edge
+
+Look at each bowl, plate section, and side item carefully. Position must point to the CENTER of that specific item.
+
+Return ONLY this exact JSON format:
 
 {
   "items": [
-    {"name": "Paneer Butter Masala", "estimated_quantity": "1 bowl"},
-    {"name": "Dal Tadka", "estimated_quantity": "1 bowl"},
-    {"name": "Rice", "estimated_quantity": "1 cup"},
-    {"name": "Roti", "estimated_quantity": "2 pieces"}
+    {"name": "Paneer Butter Masala", "estimated_quantity": "1 bowl", "x": 0.7, "y": 0.3},
+    {"name": "Dal Tadka", "estimated_quantity": "1 bowl", "x": 0.3, "y": 0.2},
+    {"name": "Rice", "estimated_quantity": "1 cup", "x": 0.5, "y": 0.5},
+    {"name": "Roti", "estimated_quantity": "2 pieces", "x": 0.2, "y": 0.7}
   ],
   "suggested_labels": ["Paneer Butter Masala", "Dal Tadka", "Rice", "Roti"]
 }
 
-Be accurate with Indian dishes. Return ONLY valid JSON, no extra text.''';
+Rules:
+- Detect EVERY distinct food item. Don't miss anything — check bowls, sides, bread, rice, pickles, chutneys, papad, salad, etc.
+- NEVER duplicate items. If there are 3 rotis, list once as "Roti" with quantity "3 pieces".
+- Use specific Indian dish names (e.g. "Bhindi Masala" not "Vegetable Curry").
+- x,y MUST accurately point to the CENTER of each food item in the photo. Be precise.
+- Return ONLY valid JSON, no markdown, no extra text.''';
 
     final response = await _callGeminiWithRetry(prompt, base64Image);
     if (response != null) {
@@ -59,6 +70,7 @@ Be accurate with Indian dishes. Return ONLY valid JSON, no extra text.''';
               ?.map((e) => DetectedItem.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
+
       final labels = (parsed['suggested_labels'] as List?)
               ?.map((e) => e.toString())
               .toList() ??
@@ -471,12 +483,16 @@ class DetectedItem {
   final String estimatedQuantity;
   final String cookingStyle;
   final bool confirmed;
+  final double x; // 0.0 (left) to 1.0 (right) position in image
+  final double y; // 0.0 (top) to 1.0 (bottom) position in image
 
   DetectedItem({
     required this.name,
     required this.estimatedQuantity,
     this.cookingStyle = 'Home',
     this.confirmed = false,
+    this.x = 0.5,
+    this.y = 0.5,
   });
 
   DetectedItem copyWith({
@@ -484,24 +500,32 @@ class DetectedItem {
     String? estimatedQuantity,
     String? cookingStyle,
     bool? confirmed,
+    double? x,
+    double? y,
   }) {
     return DetectedItem(
       name: name ?? this.name,
       estimatedQuantity: estimatedQuantity ?? this.estimatedQuantity,
       cookingStyle: cookingStyle ?? this.cookingStyle,
       confirmed: confirmed ?? this.confirmed,
+      x: x ?? this.x,
+      y: y ?? this.y,
     );
   }
 
   factory DetectedItem.fromJson(Map<String, dynamic> json) => DetectedItem(
         name: json['name'] as String? ?? 'Unknown',
         estimatedQuantity: json['estimated_quantity'] as String? ?? '1 serving',
+        x: (json['x'] as num?)?.toDouble().clamp(0.05, 0.95) ?? 0.5,
+        y: (json['y'] as num?)?.toDouble().clamp(0.05, 0.95) ?? 0.5,
       );
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'estimated_quantity': estimatedQuantity,
         'cooking_style': cookingStyle,
+        'x': x,
+        'y': y,
       };
 }
 
