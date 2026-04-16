@@ -8,6 +8,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/animated_gradient_background.dart';
 import '../../../../core/widgets/glass_card.dart';
 import '../../../../core/widgets/neon_button.dart';
+import '../../../../services/gemini_service.dart';
+import '../../../../services/indian_food_db.dart';
 import '../../../../services/providers.dart';
 import '../widgets/annotated_food_image.dart';
 import '../widgets/item_edit_sheet.dart';
@@ -42,7 +44,9 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
                         .fadeIn(duration: 400.ms),
                     const SizedBox(height: 20),
                     _buildImageSection(imagePath, detectionState),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
+                    _buildApiStatusBanner(detectionState),
+                    const SizedBox(height: 8),
                     _buildDetectedItemsList(detectionState),
                     const SizedBox(height: 28),
                     _buildQuestion()
@@ -117,7 +121,6 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
       );
     }
 
-    // Show annotated image when items are detected
     if (detectionState.status == DetectionStatus.success &&
         detectionState.result != null &&
         detectionState.result!.items.isNotEmpty) {
@@ -130,7 +133,6 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
           .slideY(begin: 0.1, end: 0);
     }
 
-    // Plain image with loading/status overlay
     return _buildPlainImagePreview(imagePath, detectionState)
         .animate()
         .fadeIn(duration: 600.ms, delay: 100.ms)
@@ -177,12 +179,28 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const Text(
-                          'AI is detecting food items...',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
+                        const Expanded(
+                          child: Text(
+                            'AI is detecting food items...',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ] else if (state.status == DetectionStatus.error) ...[
+                        const Icon(Icons.cloud_off_rounded,
+                            color: AppColors.warning, size: 18),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'AI unavailable — add items manually',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.warning,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ] else ...[
@@ -209,11 +227,183 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
     );
   }
 
+  /// Shows API status: success from Gemini, error with reason, or retry option
+  Widget _buildApiStatusBanner(DetectionState state) {
+    if (state.status == DetectionStatus.loading) {
+      return const SizedBox.shrink();
+    }
+
+    if (state.status == DetectionStatus.error && state.error != null) {
+      return GlassCard(
+        padding: const EdgeInsets.all(14),
+        borderRadius: 14,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.warning_amber_rounded,
+                      color: AppColors.warning, size: 15),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    state.error!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      final imagePath = ref.read(selectedImagePathProvider);
+                      if (imagePath != null) {
+                        ref.read(detectionProvider.notifier).detectItems(imagePath);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.cyan.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppColors.cyan.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.refresh_rounded,
+                              color: AppColors.cyan, size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Retry AI',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.cyan,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _showAddItemDialog,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.emerald.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppColors.emerald.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_rounded,
+                              color: AppColors.emerald, size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Add Items',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.emerald,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0);
+    }
+
+    if (state.status == DetectionStatus.success && state.isFromApi) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.emerald.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.emerald.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.auto_awesome_rounded,
+                color: AppColors.emerald, size: 16),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Detected by Gemini AI',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.emerald,
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: _showAddItemDialog,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded,
+                        color: AppColors.textSecondary, size: 14),
+                    SizedBox(width: 3),
+                    Text(
+                      'Add',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ).animate().fadeIn(duration: 400.ms);
+    }
+
+    return const SizedBox.shrink();
+  }
+
   /// List of detected items below the image — tappable to edit
   Widget _buildDetectedItemsList(DetectionState state) {
-    if (state.status != DetectionStatus.success ||
-        state.result == null ||
-        state.result!.items.isEmpty) {
+    if (state.result == null || state.result!.items.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -279,6 +469,7 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
               final item = items[i];
               return GestureDetector(
                 onTap: () => _showEditSheet(i, state),
+                onLongPress: () => _confirmRemoveItem(i, item.name),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   padding: const EdgeInsets.symmetric(
@@ -340,6 +531,55 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
     ).animate()
         .fadeIn(duration: 500.ms, delay: 150.ms)
         .slideY(begin: 0.05, end: 0);
+  }
+
+  void _confirmRemoveItem(int index, String name) {
+    HapticFeedback.mediumImpact();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Remove $name?',
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textTertiary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(detectionProvider.notifier).removeItem(index);
+            },
+            child: const Text('Remove', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddItemDialog() {
+    HapticFeedback.mediumImpact();
+    final commonItems = IndianFoodDB.database.values.toList();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _AddItemSheet(
+        commonItems: commonItems,
+        onAdd: (name, quantity) {
+          ref.read(detectionProvider.notifier).addItem(
+            DetectedItem(
+              name: name,
+              estimatedQuantity: quantity,
+              confirmed: true,
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _showEditSheet(int index, DetectionState state) {
@@ -561,5 +801,131 @@ class _QuestionScreenState extends ConsumerState<QuestionScreen> {
           );
       Navigator.pushNamed(context, '/results');
     }
+  }
+}
+
+/// Bottom sheet for manually adding food items from the Indian food database
+class _AddItemSheet extends StatefulWidget {
+  final List<FoodNutrition> commonItems;
+  final void Function(String name, String quantity) onAdd;
+
+  const _AddItemSheet({required this.commonItems, required this.onAdd});
+
+  @override
+  State<_AddItemSheet> createState() => _AddItemSheetState();
+}
+
+class _AddItemSheetState extends State<_AddItemSheet> {
+  String _searchQuery = '';
+
+  List<FoodNutrition> get _filtered {
+    if (_searchQuery.isEmpty) return widget.commonItems;
+    final q = _searchQuery.toLowerCase();
+    return widget.commonItems
+        .where((f) => f.name.toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.65,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.glassBorder,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Add Food Item',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: TextField(
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+              decoration: InputDecoration(
+                hintText: 'Search Indian dishes...',
+                hintStyle: const TextStyle(color: AppColors.textTertiary),
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: AppColors.textTertiary),
+                filled: true,
+                fillColor: AppColors.surfaceLight,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onChanged: (v) => setState(() => _searchQuery = v),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: _filtered.length,
+              itemBuilder: (ctx, i) {
+                final food = _filtered[i];
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  leading: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.emerald.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.restaurant_rounded,
+                        color: AppColors.emerald, size: 18),
+                  ),
+                  title: Text(
+                    food.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${food.calories.toInt()} kcal • ${food.portion}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.add_circle_rounded,
+                      color: AppColors.emerald, size: 24),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    widget.onAdd(food.name, food.portion);
+                    Navigator.pop(ctx);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

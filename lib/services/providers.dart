@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/history/data/models/meal_model.dart';
 import '../features/history/data/repositories/meal_repository.dart';
@@ -15,7 +16,6 @@ final selectedImagePathProvider = StateProvider<String?>((ref) => null);
 
 final rotiCountProvider = StateProvider<int>((ref) => 2);
 
-/// Holds the detected items from Step 1 (photo → Gemini detection)
 final detectedItemsProvider = StateProvider<DetectionResult?>((ref) => null);
 
 // --- Detection state (Step 1: detect food items from photo) ---
@@ -26,11 +26,13 @@ class DetectionState {
   final DetectionStatus status;
   final DetectionResult? result;
   final String? error;
+  final bool isFromApi;
 
   const DetectionState({
     this.status = DetectionStatus.idle,
     this.result,
     this.error,
+    this.isFromApi = false,
   });
 }
 
@@ -46,11 +48,22 @@ class DetectionNotifier extends StateNotifier<DetectionState> {
       state = DetectionState(
         status: DetectionStatus.success,
         result: result,
+        isFromApi: result.isFromApi,
       );
-    } catch (e) {
+    } on GeminiApiException catch (e) {
+      debugPrint('[Detection] API failed: $e');
+      // API failed — still show success with empty items so user can add manually
       state = DetectionState(
         status: DetectionStatus.error,
-        error: e.toString(),
+        error: e.isQuotaExhausted
+            ? 'API quota exhausted for today. You can add items manually below.'
+            : 'AI detection failed (${e.statusCode}). You can add items manually.',
+      );
+    } catch (e) {
+      debugPrint('[Detection] Unexpected error: $e');
+      state = DetectionState(
+        status: DetectionStatus.error,
+        error: 'Detection failed. You can add items manually.',
       );
     }
   }
@@ -60,6 +73,38 @@ class DetectionNotifier extends StateNotifier<DetectionState> {
     state = DetectionState(
       status: state.status,
       result: state.result!.copyWithItem(index, updatedItem),
+      isFromApi: state.isFromApi,
+    );
+  }
+
+  void addItem(DetectedItem item) {
+    final currentItems = state.result?.items ?? [];
+    final currentLabels = state.result?.suggestedLabels ?? [];
+    state = DetectionState(
+      status: DetectionStatus.success,
+      result: DetectionResult(
+        items: [...currentItems, item],
+        suggestedLabels: [...currentLabels, item.name],
+        isFromApi: state.isFromApi,
+      ),
+      isFromApi: state.isFromApi,
+    );
+  }
+
+  void removeItem(int index) {
+    if (state.result == null) return;
+    final newItems = List<DetectedItem>.from(state.result!.items);
+    final newLabels = List<String>.from(state.result!.suggestedLabels);
+    if (index < newItems.length) newItems.removeAt(index);
+    if (index < newLabels.length) newLabels.removeAt(index);
+    state = DetectionState(
+      status: DetectionStatus.success,
+      result: DetectionResult(
+        items: newItems,
+        suggestedLabels: newLabels,
+        isFromApi: state.isFromApi,
+      ),
+      isFromApi: state.isFromApi,
     );
   }
 

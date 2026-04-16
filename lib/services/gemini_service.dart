@@ -1,15 +1,36 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../core/constants/api_config.dart';
 import '../features/history/data/models/meal_model.dart';
 import 'indian_food_db.dart';
 
+class GeminiApiException implements Exception {
+  final int statusCode;
+  final String message;
+  GeminiApiException(this.statusCode, this.message);
+
+  @override
+  String toString() => 'GeminiApiException($statusCode): $message';
+
+  bool get isQuotaExhausted => statusCode == 429;
+  bool get isNotFound => statusCode == 404;
+  bool get isAuthError => statusCode == 401 || statusCode == 403;
+}
+
 class GeminiService {
   static String get _apiKey => ApiConfig.geminiApiKey;
-  static String get _baseUrl => ApiConfig.geminiBaseUrl;
 
-  /// Step 1: Detect food items from the photo using the exact prompt
+  static const _models = [
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+  ];
+
+  String _buildUrl(String model) =>
+      'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$_apiKey';
+
+  /// Step 1: Detect food items from the photo
   Future<DetectionResult> detectFoodItems(String imagePath) async {
     final imageBytes = await File(imagePath).readAsBytes();
     final base64Image = base64Encode(imageBytes);
@@ -29,28 +50,29 @@ Return the result in this exact JSON format only:
   "suggested_labels": ["Paneer Butter Masala", "Dal Tadka", "Rice", "Roti"]
 }
 
-Be accurate with Indian dishes.''';
+Be accurate with Indian dishes. Return ONLY valid JSON, no extra text.''';
 
-    try {
-      final response = await _callGemini(prompt, base64Image);
-      if (response != null) {
-        final parsed = _extractJson(response);
-        final items = (parsed['items'] as List?)
-                ?.map((e) => DetectedItem.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [];
-        final labels = (parsed['suggested_labels'] as List?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            items.map((e) => e.name).toList();
+    final response = await _callGeminiWithRetry(prompt, base64Image);
+    if (response != null) {
+      final parsed = _extractJson(response);
+      final items = (parsed['items'] as List?)
+              ?.map((e) => DetectedItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [];
+      final labels = (parsed['suggested_labels'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          items.map((e) => e.name).toList();
 
-        return DetectionResult(items: items, suggestedLabels: labels);
-      }
-    } catch (e) {
-      // Fall through to mock
+      return DetectionResult(
+        items: items,
+        suggestedLabels: labels,
+        isFromApi: true,
+      );
     }
 
-    return _getMockDetection();
+    // This means all retries and models failed
+    throw GeminiApiException(0, 'All API attempts failed. Using offline detection is available.');
   }
 
   /// Step 2: Get full nutritional breakdown including roti count
@@ -120,26 +142,67 @@ Important:
 ''';
 
     try {
-      final response = await _callGemini(prompt, base64Image);
+      final response = await _callGeminiWithRetry(prompt, base64Image);
       if (response != null) {
         final parsed = _extractJson(response);
         return _parseNutritionResponse(parsed, rotiCount, mealId, imagePath);
       }
     } catch (e) {
-      // Fall through
+      debugPrint('[Gemini] Step 2 API error: $e');
     }
 
-    // Use local DB if detected items are available, otherwise fall back to mock
     if (detectedItems != null && detectedItems.items.isNotEmpty) {
       return _buildFromLocalDB(detectedItems, rotiCount, mealId, imagePath);
     }
     return _getMockAnalysis(rotiCount, mealId, imagePath);
   }
 
-  Future<String?> _callGemini(String prompt, String base64Image) async {
+  /// Call Gemini with retry + model fallback
+  Future<String?> _callGeminiWithRetry(String prompt, String base64Image) async {
+    for (final model in _models) {
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          final result = await _callGemini(prompt, base64Image, model);
+          if (result != null) return result;
+        } on GeminiApiException catch (e) {
+          debugPrint('[Gemini] $model attempt ${attempt + 1}: ${e.message}');
+
+          if (e.isNotFound || e.isAuthError) {
+            break; // No point retrying this model
+          }
+
+          if (e.isQuotaExhausted && attempt < 2) {
+            final waitSecs = _parseRetryDelay(e.message);
+            debugPrint('[Gemini] Rate limited, waiting ${waitSecs}s before retry...');
+            await Future.delayed(Duration(seconds: waitSecs));
+            continue;
+          }
+
+          break; // Other errors, try next model
+        } catch (e) {
+          debugPrint('[Gemini] $model attempt ${attempt + 1} unexpected: $e');
+          break;
+        }
+      }
+    }
+    return null;
+  }
+
+  int _parseRetryDelay(String message) {
+    final match = RegExp(r'retry in (\d+)').firstMatch(message.toLowerCase());
+    if (match != null) {
+      final secs = int.tryParse(match.group(1)!) ?? 5;
+      return secs.clamp(2, 30);
+    }
+    return 5;
+  }
+
+  Future<String?> _callGemini(String prompt, String base64Image, String model) async {
+    debugPrint('[Gemini] Calling model: $model');
+
     final response = await http
         .post(
-          Uri.parse('$_baseUrl?key=$_apiKey'),
+          Uri.parse(_buildUrl(model)),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'contents': [
@@ -161,24 +224,34 @@ Important:
             }
           }),
         )
-        .timeout(const Duration(seconds: 30));
+        .timeout(const Duration(seconds: 45));
+
+    debugPrint('[Gemini] Response status: ${response.statusCode}');
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data['candidates']?[0]?['content']?['parts']?[0]?['text']
-          as String?;
+      final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String?;
+      debugPrint('[Gemini] Success! Response length: ${text?.length ?? 0}');
+      return text;
     }
-    return null;
+
+    // Parse error details
+    String errorMsg = 'HTTP ${response.statusCode}';
+    try {
+      final errorData = jsonDecode(response.body);
+      errorMsg = errorData['error']?['message'] as String? ?? errorMsg;
+    } catch (_) {}
+
+    debugPrint('[Gemini] Error: $errorMsg');
+    throw GeminiApiException(response.statusCode, errorMsg);
   }
 
   Map<String, dynamic> _extractJson(String text) {
     var cleaned = text.trim();
-    // Strip markdown code fences if present
     cleaned = cleaned.replaceAll(RegExp(r'```json\s*'), '');
     cleaned = cleaned.replaceAll(RegExp(r'```\s*'), '');
     cleaned = cleaned.trim();
 
-    // Find the first { and last } to extract JSON object
     final start = cleaned.indexOf('{');
     final end = cleaned.lastIndexOf('}');
     if (start != -1 && end != -1 && end > start) {
@@ -198,7 +271,6 @@ Important:
         .map((e) => FoodItem.fromJson(e as Map<String, dynamic>))
         .toList();
 
-    // Cross-validate with local DB: if Gemini returns 0 calories, fill from DB
     final items = rawItems.map((item) {
       if (item.calories > 0) return item;
       final dbEntry = IndianFoodDB.lookup(item.name);
@@ -269,7 +341,6 @@ Important:
     return score.clamp(1, 10);
   }
 
-  /// Build a full MealAnalysis from the local Indian food database
   MealAnalysis _buildFromLocalDB(
     DetectionResult detected,
     int rotiCount,
@@ -282,7 +353,6 @@ Important:
       final dbEntry = IndianFoodDB.lookup(d.name);
       if (dbEntry != null) {
         final styled = IndianFoodDB.applyStyle(dbEntry, d.cookingStyle);
-        // Parse quantity multiplier from estimatedQuantity (e.g. "2 pieces" → 2)
         final qtyMultiplier = _parseQuantity(d.estimatedQuantity);
         items.add(FoodItem(
           name: d.name,
@@ -308,7 +378,6 @@ Important:
       }
     }
 
-    // Ensure roti is in the list
     final hasRoti = items.any(
         (i) => i.name.toLowerCase().contains('roti') || i.name.toLowerCase().contains('chapati'));
     if (!hasRoti && rotiCount > 0) {
@@ -348,7 +417,7 @@ Important:
       mealType: 'meal',
       healthScore: _calculateHealthScore(
           totalCalories, totalProtein, totalCarbs, totalFat, totalFiber),
-      healthTip: 'Values calculated from standard Indian food database (IFCT 2017).',
+      healthTip: 'Values from Indian food database (IFCT 2017). For AI-powered analysis, check your Gemini API quota.',
     );
   }
 
@@ -360,90 +429,14 @@ Important:
     return 1.0;
   }
 
-  DetectionResult _getMockDetection() {
-    return DetectionResult(
-      items: [
-        DetectedItem(name: 'Dal Tadka', estimatedQuantity: '1 bowl'),
-        DetectedItem(name: 'Aloo Gobi', estimatedQuantity: '1 serving'),
-        DetectedItem(name: 'Steamed Rice', estimatedQuantity: '1 cup'),
-        DetectedItem(name: 'Roti', estimatedQuantity: '2 pieces'),
-        DetectedItem(name: 'Raita', estimatedQuantity: '1 small bowl'),
-        DetectedItem(name: 'Pickle', estimatedQuantity: '1 tbsp'),
-      ],
-      suggestedLabels: [
-        'Dal Tadka',
-        'Aloo Gobi',
-        'Steamed Rice',
-        'Roti',
-        'Raita',
-        'Pickle',
-      ],
-    );
-  }
-
   MealAnalysis _getMockAnalysis(
       int rotiCount, String mealId, String imagePath) {
     final items = [
-      FoodItem(
-        name: 'Roti',
-        calories: 120.0 * rotiCount,
-        protein: 3.5 * rotiCount,
-        carbs: 20.0 * rotiCount,
-        fat: 3.5 * rotiCount,
-        fiber: 1.2 * rotiCount,
-        portion: '$rotiCount piece(s)',
-        cookingStyle: 'Home',
-      ),
-      FoodItem(
-        name: 'Dal Tadka',
-        calories: 180,
-        protein: 9.0,
-        carbs: 24.0,
-        fat: 6.0,
-        fiber: 4.5,
-        portion: '1 bowl (150ml)',
-        cookingStyle: 'Home',
-      ),
-      FoodItem(
-        name: 'Aloo Gobi',
-        calories: 160,
-        protein: 4.0,
-        carbs: 22.0,
-        fat: 7.0,
-        fiber: 3.5,
-        portion: '1 serving (120g)',
-        cookingStyle: 'Home',
-      ),
-      FoodItem(
-        name: 'Steamed Rice',
-        calories: 200,
-        protein: 4.0,
-        carbs: 44.0,
-        fat: 0.5,
-        fiber: 0.6,
-        portion: '1 cup (150g)',
-        cookingStyle: 'Home',
-      ),
-      FoodItem(
-        name: 'Raita',
-        calories: 65,
-        protein: 3.0,
-        carbs: 5.0,
-        fat: 3.5,
-        fiber: 0.2,
-        portion: '1 small bowl (80ml)',
-        cookingStyle: 'Home',
-      ),
-      FoodItem(
-        name: 'Pickle',
-        calories: 30,
-        protein: 0.5,
-        carbs: 2.0,
-        fat: 2.5,
-        fiber: 0.5,
-        portion: '1 tbsp',
-        cookingStyle: 'Home',
-      ),
+      FoodItem(name: 'Roti', calories: 120.0 * rotiCount, protein: 3.5 * rotiCount, carbs: 20.0 * rotiCount, fat: 3.5 * rotiCount, fiber: 1.2 * rotiCount, portion: '$rotiCount piece(s)', cookingStyle: 'Home'),
+      FoodItem(name: 'Dal Tadka', calories: 180, protein: 9.0, carbs: 24.0, fat: 6.0, fiber: 4.5, portion: '1 bowl (150ml)', cookingStyle: 'Home'),
+      FoodItem(name: 'Mixed Veg Curry', calories: 140, protein: 4.0, carbs: 16.0, fat: 7.0, fiber: 4.0, portion: '1 serving (120g)', cookingStyle: 'Home'),
+      FoodItem(name: 'Steamed Rice', calories: 200, protein: 4.0, carbs: 44.0, fat: 0.5, fiber: 0.6, portion: '1 cup (150g)', cookingStyle: 'Home'),
+      FoodItem(name: 'Raita', calories: 65, protein: 3.0, carbs: 5.0, fat: 3.5, fiber: 0.2, portion: '1 small bowl (80ml)', cookingStyle: 'Home'),
     ];
 
     double totalCalories = 0, totalProtein = 0, totalCarbs = 0;
@@ -467,14 +460,12 @@ Important:
       rotiCount: rotiCount,
       imagePath: imagePath,
       mealType: 'lunch',
-      healthScore: _calculateHealthScore(
-          totalCalories, totalProtein, totalCarbs, totalFat, totalFiber),
-      healthTip: 'Good protein from dal. Consider adding a green salad for more fiber.',
+      healthScore: _calculateHealthScore(totalCalories, totalProtein, totalCarbs, totalFat, totalFiber),
+      healthTip: 'Offline fallback values. Check your Gemini API quota for AI-powered analysis.',
     );
   }
 }
 
-/// Result from the initial food detection step
 class DetectedItem {
   final String name;
   final String estimatedQuantity;
@@ -517,12 +508,21 @@ class DetectedItem {
 class DetectionResult {
   final List<DetectedItem> items;
   final List<String> suggestedLabels;
+  final bool isFromApi;
 
-  DetectionResult({required this.items, required this.suggestedLabels});
+  DetectionResult({
+    required this.items,
+    required this.suggestedLabels,
+    this.isFromApi = false,
+  });
 
   DetectionResult copyWithItem(int index, DetectedItem item) {
     final newItems = List<DetectedItem>.from(items);
     newItems[index] = item;
-    return DetectionResult(items: newItems, suggestedLabels: suggestedLabels);
+    return DetectionResult(
+      items: newItems,
+      suggestedLabels: suggestedLabels,
+      isFromApi: isFromApi,
+    );
   }
 }
