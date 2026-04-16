@@ -23,8 +23,8 @@ class GeminiService {
   static String get _apiKey => ApiConfig.geminiApiKey;
 
   static const _models = [
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
+    'gemini-2.5-flash-lite',
+    'gemini-3-flash-preview',
   ];
 
   String _buildUrl(String model) =>
@@ -171,9 +171,9 @@ Important:
             break; // No point retrying this model
           }
 
-          if (e.isQuotaExhausted && attempt < 2) {
+          if ((e.isQuotaExhausted || e.statusCode == 503) && attempt < 2) {
             final waitSecs = _parseRetryDelay(e.message);
-            debugPrint('[Gemini] Rate limited, waiting ${waitSecs}s before retry...');
+            debugPrint('[Gemini] Rate limited / unavailable, waiting ${waitSecs}s before retry...');
             await Future.delayed(Duration(seconds: waitSecs));
             continue;
           }
