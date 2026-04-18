@@ -42,15 +42,27 @@ class _MacroChartState extends State<MacroChart>
         widget.meal.totalFat;
 
     return GlassCard(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+      borderRadius: 22,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Macro Split',
+          Text(
+            'MACROS',
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 10,
               fontWeight: FontWeight.w700,
+              letterSpacing: 1.4,
+              color: AppColors.textTertiary.withValues(alpha: 0.95),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Macro split',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.25,
               color: AppColors.textPrimary,
             ),
           ),
@@ -127,6 +139,7 @@ class _MacroChartState extends State<MacroChart>
                     fontSize: 13,
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w500,
+                    letterSpacing: 0.05,
                   ),
                 ),
               ],
@@ -186,8 +199,9 @@ class _AnimatedProgressBar extends AnimatedWidget {
                 borderRadius: BorderRadius.circular(4),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withValues(alpha: 0.4),
-                    blurRadius: 6,
+                    color: color.withValues(alpha: 0.22),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),

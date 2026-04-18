@@ -21,7 +21,7 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 12),
     )..repeat();
   }
 
@@ -35,7 +35,19 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Container(color: AppColors.background),
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF07070D),
+                Color(0xFF0B0B16),
+                Color(0xFF070712),
+              ],
+            ),
+          ),
+        ),
         AnimatedBuilder2(
           listenable: _controller,
           builder: (context, _) {
@@ -71,22 +83,30 @@ class _GlowPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint1 = Paint()
-      ..color = AppColors.emerald.withValues(alpha: 0.06)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 80);
+    final p1 = Paint()
+      ..color = AppColors.emerald.withValues(alpha: 0.055)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 120);
 
-    final paint2 = Paint()
-      ..color = AppColors.cyan.withValues(alpha: 0.04)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 100);
+    final p2 = Paint()
+      ..color = AppColors.cyan.withValues(alpha: 0.035)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 140);
 
-    final x1 = size.width * (0.3 + 0.4 * sin(progress * 2 * pi));
-    final y1 = size.height * (0.2 + 0.3 * cos(progress * 2 * pi));
+    final p3 = Paint()
+      ..color = AppColors.violet.withValues(alpha: 0.04)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 160);
 
-    final x2 = size.width * (0.7 - 0.3 * cos(progress * 2 * pi));
-    final y2 = size.height * (0.6 + 0.2 * sin(progress * 2 * pi));
+    final x1 = size.width * (0.15 + 0.25 * sin(progress * 2 * pi));
+    final y1 = size.height * (0.1 + 0.2 * cos(progress * 2 * pi));
 
-    canvas.drawCircle(Offset(x1, y1), 200, paint1);
-    canvas.drawCircle(Offset(x2, y2), 180, paint2);
+    final x2 = size.width * (0.8 - 0.2 * cos(progress * 2 * pi));
+    final y2 = size.height * (0.5 + 0.15 * sin(progress * 2 * pi));
+
+    final x3 = size.width * (0.5 + 0.15 * sin(progress * 3 * pi));
+    final y3 = size.height * (0.8 - 0.1 * cos(progress * 3 * pi));
+
+    canvas.drawCircle(Offset(x1, y1), 220, p1);
+    canvas.drawCircle(Offset(x2, y2), 200, p2);
+    canvas.drawCircle(Offset(x3, y3), 240, p3);
   }
 
   @override

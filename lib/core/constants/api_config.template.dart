@@ -5,7 +5,8 @@ class ApiConfig {
 
   static const String geminiApiKey = 'YOUR_GEMINI_API_KEY_HERE';
 
-  static const String geminiModel = 'gemini-2.0-flash';
+  /// Prefer a current model; older IDs may return 404 for new API keys.
+  static const String geminiModel = 'gemini-2.5-flash';
 
   static String get geminiBaseUrl =>
       'https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent';

@@ -69,24 +69,27 @@ class FoodItemTile extends StatelessWidget {
     final styleColor = _getStyleColor(item.cookingStyle);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: GlassCard(
-        padding: const EdgeInsets.all(16),
-        borderRadius: 16,
+        padding: const EdgeInsets.all(18),
+        borderRadius: 20,
         child: Column(
           children: [
             Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
-                    color: AppColors.emerald.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.emerald.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.emerald.withValues(alpha: 0.18),
+                    ),
                   ),
                   child: Icon(
                     _getFoodIcon(),
-                    color: AppColors.emerald,
+                    color: AppColors.emerald.withValues(alpha: 0.95),
                     size: 22,
                   ),
                 ),
@@ -100,6 +103,7 @@ class FoodItemTile extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
+                          letterSpacing: -0.15,
                           color: AppColors.textPrimary,
                         ),
                       ),
@@ -153,18 +157,20 @@ class FoodItemTile extends StatelessWidget {
                   children: [
                     Text(
                       '${item.calories.toInt()}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.emerald,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                        color: AppColors.emerald.withValues(alpha: 0.98),
                       ),
                     ),
-                    const Text(
+                    Text(
                       'kcal',
                       style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textTertiary,
-                        fontWeight: FontWeight.w500,
+                        color: AppColors.textTertiary.withValues(alpha: 0.95),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
                       ),
                     ),
                   ],

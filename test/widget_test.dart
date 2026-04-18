@@ -7,7 +7,9 @@ void main() {
     await tester.pumpWidget(
       const ProviderScope(child: ThaliApp()),
     );
-    await tester.pumpAndSettle();
+    // Use pump with a duration instead of pumpAndSettle because
+    // AnimatedGradientBackground uses a repeat() animation that never settles.
+    await tester.pump(const Duration(seconds: 1));
 
     expect(find.text('Thali'), findsWidgets);
   });

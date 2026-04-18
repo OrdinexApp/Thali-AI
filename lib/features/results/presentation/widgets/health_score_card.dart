@@ -56,7 +56,8 @@ class _HealthScoreCardState extends State<HealthScoreCard>
     final color = _scoreColor(widget.score);
 
     return GlassCard(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+      borderRadius: 22,
       child: Column(
         children: [
           Row(
@@ -78,10 +79,11 @@ class _HealthScoreCardState extends State<HealthScoreCard>
                     Row(
                       children: [
                         const Text(
-                          'Health Score',
+                          'Health score',
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
+                            letterSpacing: -0.1,
                             color: AppColors.textSecondary,
                           ),
                         ),
@@ -90,8 +92,11 @@ class _HealthScoreCardState extends State<HealthScoreCard>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: color.withValues(alpha: 0.22),
+                            ),
                           ),
                           child: Text(
                             _scoreLabel(widget.score),
@@ -115,10 +120,12 @@ class _HealthScoreCardState extends State<HealthScoreCard>
                           Expanded(
                             child: Text(
                               widget.tip!,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textTertiary,
-                                height: 1.4,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textTertiary.withValues(alpha: 0.95),
+                                height: 1.45,
+                                fontWeight: FontWeight.w400,
+                                letterSpacing: 0.05,
                               ),
                             ),
                           ),

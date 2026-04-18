@@ -13,19 +13,21 @@ class GlassCard extends StatelessWidget {
   final double? width;
   final double? height;
   final VoidCallback? onTap;
+  final bool showTopHighlight;
 
   const GlassCard({
     super.key,
     required this.child,
     this.padding,
     this.margin,
-    this.borderRadius = 20,
-    this.blurAmount = 20,
+    this.borderRadius = 22,
+    this.blurAmount = 32,
     this.borderColor,
     this.backgroundColor,
     this.width,
     this.height,
     this.onTap,
+    this.showTopHighlight = false,
   });
 
   @override
@@ -37,10 +39,7 @@ class GlassCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
         child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: blurAmount,
-            sigmaY: blurAmount,
-          ),
+          filter: ImageFilter.blur(sigmaX: blurAmount, sigmaY: blurAmount),
           child: Container(
             padding: padding ?? const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -48,17 +47,44 @@ class GlassCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
                 color: borderColor ?? AppColors.glassBorder,
-                width: 0.5,
+                width: 0.8,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 40,
+                  offset: const Offset(0, 16),
+                  spreadRadius: -10,
+                ),
+                BoxShadow(
+                  color: AppColors.cyan.withValues(alpha: 0.04),
+                  blurRadius: 60,
+                  offset: const Offset(0, 24),
                 ),
               ],
             ),
-            child: child,
+            child: showTopHighlight
+                ? Stack(
+                    children: [
+                      Positioned(
+                        top: 0,
+                        left: 16,
+                        right: 16,
+                        child: Container(
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              Colors.transparent,
+                              Colors.white.withValues(alpha: 0.18),
+                              Colors.transparent,
+                            ]),
+                          ),
+                        ),
+                      ),
+                      child,
+                    ],
+                  )
+                : child,
           ),
         ),
       ),

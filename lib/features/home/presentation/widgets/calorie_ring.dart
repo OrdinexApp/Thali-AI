@@ -74,18 +74,20 @@ class _CalorieRingState extends State<CalorieRing>
                     '${(progress * 100 * _animation.value).toInt()}%',
                     style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
                       height: 1,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   const Text(
                     'of goal',
                     style: TextStyle(
                       fontSize: 10,
                       color: AppColors.textTertiary,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ],
@@ -160,11 +162,11 @@ class _RingPainter extends CustomPainter {
       );
 
       final glowPaint = Paint()
-        ..color = AppColors.emerald.withValues(alpha: 0.3)
+        ..color = AppColors.emerald.withValues(alpha: 0.14)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth + 6
+        ..strokeWidth = strokeWidth + 4
         ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
 
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),

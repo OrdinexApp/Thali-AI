@@ -495,8 +495,6 @@ class ProgressScreen extends ConsumerWidget {
               _buildMiniChip('C: ${meal.totalCarbs.toInt()}g', AppColors.warning),
               const SizedBox(width: 8),
               _buildMiniChip('F: ${meal.totalFat.toInt()}g', AppColors.error),
-              const SizedBox(width: 8),
-              _buildMiniChip('${meal.rotiCount} rotis', AppColors.neonGreen),
             ],
           ),
         ],

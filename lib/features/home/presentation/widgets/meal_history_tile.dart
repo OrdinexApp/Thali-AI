@@ -13,10 +13,10 @@ class MealHistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: GlassCard(
-        padding: const EdgeInsets.all(16),
-        borderRadius: 16,
+        padding: const EdgeInsets.all(18),
+        borderRadius: 20,
         child: Row(
           children: [
             _buildImage(),
@@ -31,29 +31,34 @@ class MealHistoryTile extends StatelessWidget {
                       Text(
                         _getMealLabel(),
                         style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textPrimary,
+                          letterSpacing: -0.2,
                         ),
                       ),
                       Text(
                         DateFormat('h:mm a').format(meal.timestamp),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textTertiary,
+                          color: AppColors.textTertiary.withValues(alpha: 0.95),
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${meal.items.length} items · ${meal.rotiCount} rotis',
+                    '${meal.items.length} ${meal.items.length == 1 ? 'item' : 'items'}',
                     style: const TextStyle(
                       fontSize: 12,
+                      height: 1.3,
                       color: AppColors.textTertiary,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       _buildMiniStat(
@@ -94,13 +99,16 @@ class MealHistoryTile extends StatelessWidget {
 
   Widget _buildImage() {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        width: 60,
-        height: 60,
+        width: 64,
+        height: 64,
         decoration: BoxDecoration(
           color: AppColors.surfaceLight,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.glassBorder.withValues(alpha: 0.5),
+          ),
         ),
         child: meal.imagePath != null && File(meal.imagePath!).existsSync()
             ? Image.file(

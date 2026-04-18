@@ -14,8 +14,6 @@ final geminiServiceProvider = Provider<GeminiService>((ref) {
 
 final selectedImagePathProvider = StateProvider<String?>((ref) => null);
 
-final rotiCountProvider = StateProvider<int>((ref) => 2);
-
 final detectedItemsProvider = StateProvider<DetectionResult?>((ref) => null);
 
 // --- Detection state (Step 1: detect food items from photo) ---
@@ -45,25 +43,34 @@ class DetectionNotifier extends StateNotifier<DetectionState> {
     state = const DetectionState(status: DetectionStatus.loading);
     try {
       final result = await _geminiService.detectFoodItems(imagePath);
-      state = DetectionState(
-        status: DetectionStatus.success,
-        result: result,
+      // Auto-confirm every item up front. The model already gives us the name,
+      // quantity, and category, so the user only needs to correct mistakes
+      // (via tap-to-edit) instead of confirming every correct row one-by-one.
+      final autoConfirmed = DetectionResult(
+        items: result.items.map((i) => i.copyWith(confirmed: true)).toList(),
+        suggestedLabels: result.suggestedLabels,
         isFromApi: result.isFromApi,
       );
-    } on GeminiApiException catch (e) {
-      debugPrint('[Detection] API failed: $e');
-      // API failed — still show success with empty items so user can add manually
+      state = DetectionState(
+        status: DetectionStatus.success,
+        result: autoConfirmed,
+        isFromApi: result.isFromApi,
+      );
+    } on MealAnalysisException catch (e) {
+      debugPrint('[Detection] Failed: $e');
+      // Detection failure isn't fatal — the user can still add items manually
+      // below. Show a neutral message; do not leak status codes or vendor.
       state = DetectionState(
         status: DetectionStatus.error,
-        error: e.isQuotaExhausted
-            ? 'API quota exhausted for today. You can add items manually below.'
-            : 'AI detection failed (${e.statusCode}). You can add items manually.',
+        error:
+            "We couldn't auto-detect items this time. You can add them manually below.",
       );
     } catch (e) {
-      debugPrint('[Detection] Unexpected error: $e');
-      state = DetectionState(
+      debugPrint('[Detection] Unexpected: $e');
+      state = const DetectionState(
         status: DetectionStatus.error,
-        error: 'Detection failed. You can add items manually.',
+        error:
+            "We couldn't auto-detect items this time. You can add them manually below.",
       );
     }
   }
@@ -126,11 +133,13 @@ class AnalysisState {
   final AnalysisStatus status;
   final MealAnalysis? result;
   final String? error;
+  final AnalysisFailureReason? failureReason;
 
   const AnalysisState({
     this.status = AnalysisStatus.idle,
     this.result,
     this.error,
+    this.failureReason,
   });
 }
 
@@ -138,21 +147,25 @@ class AnalysisNotifier extends StateNotifier<AnalysisState> {
   final GeminiService _geminiService;
   final MealRepository _mealRepository;
 
+  // Remember last inputs so the UI can retry in place without re-navigating.
+  String? _lastImagePath;
+  DetectionResult? _lastDetectedItems;
+
   AnalysisNotifier(this._geminiService, this._mealRepository)
       : super(const AnalysisState());
 
   Future<void> analyzeImage({
     required String imagePath,
-    required int rotiCount,
     DetectionResult? detectedItems,
   }) async {
+    _lastImagePath = imagePath;
+    _lastDetectedItems = detectedItems;
     state = const AnalysisState(status: AnalysisStatus.loading);
 
     try {
       final mealId = DateTime.now().millisecondsSinceEpoch.toString();
       final result = await _geminiService.analyzeThaliImage(
         imagePath: imagePath,
-        rotiCount: rotiCount,
         mealId: mealId,
         detectedItems: detectedItems,
       );
@@ -160,12 +173,32 @@ class AnalysisNotifier extends StateNotifier<AnalysisState> {
         status: AnalysisStatus.success,
         result: result,
       );
-    } catch (e) {
+    } on MealAnalysisException catch (e) {
+      debugPrint('[Analysis] Failed: $e');
       state = AnalysisState(
         status: AnalysisStatus.error,
-        error: e.toString(),
+        error: e.userMessage,
+        failureReason: e.reason,
+      );
+    } catch (e) {
+      debugPrint('[Analysis] Unexpected: $e');
+      state = const AnalysisState(
+        status: AnalysisStatus.error,
+        error: "Couldn't analyze your meal right now. Please try again.",
+        failureReason: AnalysisFailureReason.unknown,
       );
     }
+  }
+
+  /// Retry the last analysis with the same inputs. Safe to call only after
+  /// a previous [analyzeImage] has been made in this session.
+  Future<void> retry() async {
+    final path = _lastImagePath;
+    if (path == null) return;
+    await analyzeImage(
+      imagePath: path,
+      detectedItems: _lastDetectedItems,
+    );
   }
 
   Future<void> saveMeal() async {
@@ -175,6 +208,8 @@ class AnalysisNotifier extends StateNotifier<AnalysisState> {
   }
 
   void reset() {
+    _lastImagePath = null;
+    _lastDetectedItems = null;
     state = const AnalysisState();
   }
 }
