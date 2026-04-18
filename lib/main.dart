@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/shell/main_shell.dart';
+import 'features/auth/presentation/screens/auth_gate.dart';
 import 'features/question/presentation/screens/question_screen.dart';
 import 'features/results/presentation/screens/results_screen.dart';
+import 'features/shell/main_shell.dart';
+import 'services/supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Hive.initFlutter();
-  await Hive.openBox('meals');
+  await SupabaseService.initialize();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -39,7 +39,7 @@ class ThaliApp extends StatelessWidget {
       title: 'Thali',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      home: const MainShell(),
+      home: const AuthGate(),
       onGenerateRoute: (settings) {
         Widget page;
         switch (settings.name) {

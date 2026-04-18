@@ -22,6 +22,8 @@ class ResultsScreen extends ConsumerStatefulWidget {
 }
 
 class _ResultsScreenState extends ConsumerState<ResultsScreen> {
+  bool _saving = false;
+
   @override
   Widget build(BuildContext context) {
     final analysisState = ref.watch(analysisProvider);
@@ -235,8 +237,9 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
                   .fadeIn(duration: 500.ms, delay: 400.ms),
               const SizedBox(height: 20),
               NeonButton(
-                text: 'Save Meal',
+                text: _saving ? 'Saving...' : 'Save Meal',
                 icon: Icons.bookmark_add_rounded,
+                isLoading: _saving,
                 onPressed: _onSaveMeal,
               ).animate().fadeIn(duration: 600.ms, delay: 450.ms).slideY(begin: 0.08, end: 0),
               const SizedBox(height: 10),
@@ -264,12 +267,12 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
   Widget _buildHero(MealAnalysis meal) {
     return Stack(
       children: [
-        // Photo background
+        // Photo background (local file path during analysis, signed URL after refresh)
         if (meal.imagePath != null)
           SizedBox(
             height: 300,
             width: double.infinity,
-            child: Image.file(File(meal.imagePath!), fit: BoxFit.cover),
+            child: _heroImage(meal.imagePath!),
           )
         else
           Container(
@@ -663,23 +666,38 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
     ref.read(analysisProvider.notifier).retry();
   }
 
+  Widget _heroImage(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return Image.network(path, fit: BoxFit.cover);
+    }
+    return Image.file(File(path), fit: BoxFit.cover);
+  }
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
   void _onSaveMeal() async {
+    if (_saving) return;
     HapticFeedback.heavyImpact();
-    await ref.read(analysisProvider.notifier).saveMeal();
-    ref.invalidate(mealHistoryProvider);
-    ref.invalidate(todayCaloriesProvider);
-    ref.invalidate(todayMealsProvider);
+    setState(() => _saving = true);
 
-    if (mounted) {
+    try {
+      await ref.read(analysisProvider.notifier).saveMeal();
+      ref.invalidate(mealHistoryProvider);
+      ref.invalidate(todayCaloriesProvider);
+      ref.invalidate(todayMealsProvider);
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(
             children: [
-              Icon(Icons.check_circle_rounded, color: AppColors.emerald, size: 20),
+              Icon(Icons.check_circle_rounded,
+                  color: AppColors.emerald, size: 20),
               SizedBox(width: 12),
-              Text('Meal saved!', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              Text('Meal saved!',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
             ],
           ),
           backgroundColor: AppColors.surfaceLight,
@@ -690,6 +708,34 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
         ),
       );
       Navigator.popUntil(context, (route) => route.isFirst);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.error_outline_rounded,
+                  color: AppColors.error, size: 20),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "Couldn't save your meal. Please try again.",
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.surfaceLight,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          margin: const EdgeInsets.all(16),
+          elevation: 0,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 

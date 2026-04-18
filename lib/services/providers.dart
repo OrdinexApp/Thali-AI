@@ -1,12 +1,86 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../features/auth/data/auth_repository.dart';
 import '../features/history/data/models/meal_model.dart';
 import '../features/history/data/repositories/meal_repository.dart';
+import '../features/history/data/repositories/supabase_meal_repository.dart';
+import '../features/profile/data/models/profile_model.dart';
+import '../features/profile/data/profile_repository.dart';
+import 'connectivity_service.dart';
 import 'gemini_service.dart';
+import 'image_upload_service.dart';
 
-final mealRepositoryProvider = Provider<MealRepository>((ref) {
-  return MealRepository();
+// --- Infra services ---
+
+final connectivityServiceProvider = Provider<ConnectivityService>((ref) {
+  return ConnectivityService();
 });
+
+/// Pushes online/offline status. Combines an initial check with the
+/// platform connectivity stream so the UI updates as soon as the user
+/// (re)connects.
+final connectivityStatusProvider = StreamProvider<bool>((ref) async* {
+  final service = ref.watch(connectivityServiceProvider);
+  yield await service.isOnline();
+  yield* service.onStatusChange();
+});
+
+final imageUploadServiceProvider = Provider<ImageUploadService>((ref) {
+  return ImageUploadService();
+});
+
+// --- Auth ---
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  return AuthRepository();
+});
+
+/// Streams Supabase auth events. AuthGate uses this to route between
+/// sign-in and the main shell.
+final authStateProvider = StreamProvider<AuthState>((ref) {
+  return ref.watch(authRepositoryProvider).authStateChanges;
+});
+
+final currentUserProvider = Provider<User?>((ref) {
+  final state = ref.watch(authStateProvider);
+  return state.maybeWhen(
+    data: (s) => s.session?.user,
+    orElse: () => ref.watch(authRepositoryProvider).currentUser,
+  );
+});
+
+// --- Profile ---
+
+final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
+  return ProfileRepository();
+});
+
+final profileProvider = FutureProvider<Profile?>((ref) async {
+  // Re-fetch when auth changes so logout/login picks up the right profile.
+  ref.watch(currentUserProvider);
+  return ref.watch(profileRepositoryProvider).getCurrentProfile();
+});
+
+/// Daily calorie goal for the current user, falling back to 2000.
+final dailyCalorieGoalProvider = Provider<int>((ref) {
+  final profile = ref.watch(profileProvider);
+  return profile.maybeWhen(
+    data: (p) => p?.dailyCalorieGoal ?? 2000,
+    orElse: () => 2000,
+  );
+});
+
+// --- Meals (Supabase) ---
+
+/// Default to the Supabase-backed implementation. Tests can override this
+/// provider with an in-memory [MealRepository] without booting Supabase.
+final mealRepositoryProvider = Provider<MealRepository>((ref) {
+  return SupabaseMealRepository();
+});
+
+// --- Gemini + capture flow ---
 
 final geminiServiceProvider = Provider<GeminiService>((ref) {
   return GeminiService();
@@ -225,16 +299,19 @@ final analysisProvider =
 // --- Meal history providers ---
 
 final mealHistoryProvider = FutureProvider<List<MealAnalysis>>((ref) async {
+  ref.watch(currentUserProvider);
   final repo = ref.watch(mealRepositoryProvider);
   return repo.getAllMeals();
 });
 
 final todayCaloriesProvider = FutureProvider<double>((ref) async {
+  ref.watch(currentUserProvider);
   final repo = ref.watch(mealRepositoryProvider);
   return repo.getTodayCalories();
 });
 
 final todayMealsProvider = FutureProvider<List<MealAnalysis>>((ref) async {
+  ref.watch(currentUserProvider);
   final repo = ref.watch(mealRepositoryProvider);
   return repo.getTodayMeals();
 });

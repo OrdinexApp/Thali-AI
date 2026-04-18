@@ -10,4 +10,8 @@ class ApiConfig {
 
   static String get geminiBaseUrl =>
       'https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent';
+
+  // Supabase project (ThaliAi).
+  static const String supabaseUrl = 'https://YOUR-PROJECT-REF.supabase.co';
+  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
 }

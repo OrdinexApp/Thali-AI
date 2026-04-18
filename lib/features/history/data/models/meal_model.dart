@@ -64,6 +64,35 @@ class FoodItem {
         portion: json['portion'] as String?,
         cookingStyle: json['cooking_style'] as String?,
       );
+
+  /// Row layout for the `public.meal_items` table.
+  Map<String, dynamic> toItemRow({
+    required String mealId,
+    required int sortOrder,
+  }) =>
+      {
+        'meal_id': mealId,
+        'sort_order': sortOrder,
+        'name': name,
+        'calories': calories,
+        'protein': protein,
+        'carbs': carbs,
+        'fat': fat,
+        'fiber': fiber,
+        'portion': portion,
+        'cooking_style': cookingStyle,
+      };
+
+  factory FoodItem.fromRow(Map<String, dynamic> row) => FoodItem(
+        name: row['name'] as String? ?? 'Unknown',
+        calories: (row['calories'] as num?)?.toDouble() ?? 0,
+        protein: (row['protein'] as num?)?.toDouble() ?? 0,
+        carbs: (row['carbs'] as num?)?.toDouble() ?? 0,
+        fat: (row['fat'] as num?)?.toDouble() ?? 0,
+        fiber: (row['fiber'] as num?)?.toDouble() ?? 0,
+        portion: row['portion'] as String?,
+        cookingStyle: row['cooking_style'] as String?,
+      );
 }
 
 class MealAnalysis {
@@ -128,4 +157,56 @@ class MealAnalysis {
         healthScore: (json['healthScore'] as num?)?.toInt() ?? 0,
         healthTip: json['healthTip'] as String?,
       );
+
+  /// Row layout for the `public.meals` table. Items are inserted separately
+  /// into `public.meal_items` via [FoodItem.toItemRow].
+  Map<String, dynamic> toMealRow({
+    required String userId,
+    String? imageStoragePath,
+  }) =>
+      {
+        'id': id,
+        'user_id': userId,
+        'logged_at': timestamp.toUtc().toIso8601String(),
+        'meal_type': mealType,
+        'total_calories': totalCalories,
+        'total_protein': totalProtein,
+        'total_carbs': totalCarbs,
+        'total_fat': totalFat,
+        'total_fiber': totalFiber,
+        'health_score': healthScore == 0 ? null : healthScore,
+        'health_tip': healthTip,
+        'image_storage_path': imageStoragePath,
+      };
+
+  /// Reassemble a [MealAnalysis] from a `meals` row plus the rows from
+  /// `meal_items` (already filtered to this meal). [imagePath] should be a
+  /// pre-resolved signed URL or null.
+  factory MealAnalysis.fromRow({
+    required Map<String, dynamic> meal,
+    required List<Map<String, dynamic>> items,
+    String? imagePath,
+  }) {
+    final sorted = [...items]
+      ..sort((a, b) {
+        final ao = (a['sort_order'] as num?)?.toInt() ?? 0;
+        final bo = (b['sort_order'] as num?)?.toInt() ?? 0;
+        return ao.compareTo(bo);
+      });
+
+    return MealAnalysis(
+      id: meal['id'] as String,
+      items: sorted.map(FoodItem.fromRow).toList(),
+      totalCalories: (meal['total_calories'] as num?)?.toDouble() ?? 0,
+      totalProtein: (meal['total_protein'] as num?)?.toDouble() ?? 0,
+      totalCarbs: (meal['total_carbs'] as num?)?.toDouble() ?? 0,
+      totalFat: (meal['total_fat'] as num?)?.toDouble() ?? 0,
+      totalFiber: (meal['total_fiber'] as num?)?.toDouble() ?? 0,
+      imagePath: imagePath,
+      timestamp: DateTime.parse(meal['logged_at'] as String).toLocal(),
+      mealType: meal['meal_type'] as String?,
+      healthScore: (meal['health_score'] as num?)?.toInt() ?? 0,
+      healthTip: meal['health_tip'] as String?,
+    );
+  }
 }

@@ -61,6 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     final todayCalories = ref.watch(todayCaloriesProvider);
     final todayMeals = ref.watch(todayMealsProvider);
+    final dailyGoal = ref.watch(dailyCalorieGoalProvider);
 
     return AnimatedGradientBackground(
       child: SafeArea(
@@ -79,7 +80,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         .fadeIn(duration: 700.ms)
                         .slideY(begin: -0.15, end: 0, curve: Curves.easeOut),
                     const SizedBox(height: 28),
-                    _buildCalorieCard(todayCalories)
+                    _buildCalorieCard(todayCalories, dailyGoal)
                         .animate()
                         .fadeIn(duration: 700.ms, delay: 100.ms)
                         .slideY(begin: 0.08, end: 0, curve: Curves.easeOut),
@@ -161,11 +162,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   // ── Calorie Card ──────────────────────────────────────────────────────────
 
-  Widget _buildCalorieCard(AsyncValue<double> todayCalories) {
+  Widget _buildCalorieCard(AsyncValue<double> todayCalories, int dailyGoal) {
     final consumed = todayCalories.valueOrNull ?? 0;
-    const goal = 2000.0;
+    final goal = dailyGoal.toDouble();
     final remaining = goal - consumed;
-    final progress = (consumed / goal).clamp(0.0, 1.0);
+    final progress = goal == 0 ? 0.0 : (consumed / goal).clamp(0.0, 1.0);
 
     return Container(
       decoration: BoxDecoration(

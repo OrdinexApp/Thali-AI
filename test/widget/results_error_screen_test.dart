@@ -23,9 +23,21 @@ class _AlwaysFailsCounting extends GeminiService {
   }
 }
 
-class _InMemoryRepo extends MealRepository {
+class _InMemoryRepo implements MealRepository {
   @override
   Future<void> saveMeal(MealAnalysis meal) async {}
+
+  @override
+  Future<List<MealAnalysis>> getAllMeals() async => const [];
+
+  @override
+  Future<List<MealAnalysis>> getTodayMeals() async => const [];
+
+  @override
+  Future<double> getTodayCalories() async => 0;
+
+  @override
+  Future<void> deleteMeal(String id) async {}
 }
 
 Future<void> _useTallSurface(WidgetTester tester) async {

@@ -30,12 +30,32 @@ class _AlwaysFailsService extends GeminiService {
   }
 }
 
-class _InMemoryRepo extends MealRepository {
+class _InMemoryRepo implements MealRepository {
   final List<MealAnalysis> saved = [];
 
   @override
   Future<void> saveMeal(MealAnalysis meal) async {
     saved.add(meal);
+  }
+
+  @override
+  Future<List<MealAnalysis>> getAllMeals() async => saved;
+
+  @override
+  Future<List<MealAnalysis>> getTodayMeals() async => saved;
+
+  @override
+  Future<double> getTodayCalories() async {
+    double total = 0;
+    for (final m in saved) {
+      total += m.totalCalories;
+    }
+    return total;
+  }
+
+  @override
+  Future<void> deleteMeal(String id) async {
+    saved.removeWhere((m) => m.id == id);
   }
 }
 

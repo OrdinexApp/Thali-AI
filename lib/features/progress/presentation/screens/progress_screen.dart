@@ -16,6 +16,7 @@ class ProgressScreen extends ConsumerWidget {
     final todayCalories = ref.watch(todayCaloriesProvider);
     final todayMeals = ref.watch(todayMealsProvider);
     final allMeals = ref.watch(mealHistoryProvider);
+    final dailyGoal = ref.watch(dailyCalorieGoalProvider);
 
     return AnimatedGradientBackground(
       child: SafeArea(
@@ -34,7 +35,7 @@ class ProgressScreen extends ConsumerWidget {
                         .fadeIn(duration: 500.ms)
                         .slideY(begin: -0.15, end: 0),
                     const SizedBox(height: 24),
-                    _buildWeeklySummary(todayCalories)
+                    _buildWeeklySummary(todayCalories, dailyGoal)
                         .animate()
                         .fadeIn(duration: 500.ms, delay: 100.ms)
                         .slideY(begin: 0.1, end: 0),
@@ -85,10 +86,10 @@ class ProgressScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildWeeklySummary(AsyncValue<double> todayCalories) {
+  Widget _buildWeeklySummary(AsyncValue<double> todayCalories, int dailyGoal) {
     final today = todayCalories.valueOrNull ?? 0;
-    const goal = 2000.0;
-    final percent = ((today / goal) * 100).clamp(0, 100).toInt();
+    final goal = dailyGoal.toDouble();
+    final percent = goal == 0 ? 0 : ((today / goal) * 100).clamp(0, 100).toInt();
 
     return GlassCard(
       padding: const EdgeInsets.all(20),

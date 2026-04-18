@@ -110,19 +110,33 @@ class MealHistoryTile extends StatelessWidget {
             color: AppColors.glassBorder.withValues(alpha: 0.5),
           ),
         ),
-        child: meal.imagePath != null && File(meal.imagePath!).existsSync()
-            ? Image.file(
-                File(meal.imagePath!),
-                fit: BoxFit.cover,
-              )
-            : const Icon(
-                Icons.restaurant_rounded,
-                color: AppColors.emerald,
-                size: 28,
-              ),
+        child: _buildImageContent(),
       ),
     );
   }
+
+  Widget _buildImageContent() {
+    final path = meal.imagePath;
+    if (path == null || path.isEmpty) return _placeholder();
+
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _placeholder(),
+      );
+    }
+
+    final file = File(path);
+    if (!file.existsSync()) return _placeholder();
+    return Image.file(file, fit: BoxFit.cover);
+  }
+
+  Widget _placeholder() => const Icon(
+        Icons.restaurant_rounded,
+        color: AppColors.emerald,
+        size: 28,
+      );
 
   Widget _buildMiniStat(String value, String label, Color color) {
     return Row(

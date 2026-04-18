@@ -1,16 +1,21 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:thali/main.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:thali/features/auth/presentation/screens/sign_in_screen.dart';
 
+/// Lightweight smoke test that doesn't depend on a live Supabase client.
+/// The full AuthGate flow (connectivity + auth state) is covered by
+/// integration tests; this just makes sure the brand surfaces correctly.
 void main() {
-  testWidgets('App launches and shows Thali title', (WidgetTester tester) async {
+  testWidgets('SignInScreen renders the Thali brand', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: ThaliApp()),
+      const ProviderScope(
+        child: MaterialApp(home: SignInScreen()),
+      ),
     );
-    // Use pump with a duration instead of pumpAndSettle because
-    // AnimatedGradientBackground uses a repeat() animation that never settles.
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Thali'), findsWidgets);
+    expect(find.text('Sign in'), findsWidgets);
   });
 }
