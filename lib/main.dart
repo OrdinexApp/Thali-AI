@@ -7,12 +7,16 @@ import 'features/auth/presentation/screens/auth_gate.dart';
 import 'features/question/presentation/screens/question_screen.dart';
 import 'features/results/presentation/screens/results_screen.dart';
 import 'features/shell/main_shell.dart';
+import 'services/notification_service.dart';
+import 'services/preferences_store.dart';
 import 'services/supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await PreferencesStore.ensureInitialized();
   await SupabaseService.initialize();
+  await NotificationService.instance.initialize();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

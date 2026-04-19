@@ -3,9 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/theme/theme_variant.dart';
 import '../../../../core/widgets/animated_gradient_background.dart';
 import '../../../../core/widgets/glass_card.dart';
+import '../../../../services/meal_reminders_controller.dart';
 import '../../../../services/providers.dart';
+import '../../../../services/theme_controller.dart';
+import 'appearance_screen.dart';
+import 'meal_reminders_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -21,6 +26,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.watch(currentUserProvider);
     final profileAsync = ref.watch(profileProvider);
     final dailyGoal = ref.watch(dailyCalorieGoalProvider);
+    final reminders = ref.watch(mealRemindersControllerProvider);
+    final theme = ref.watch(themeControllerProvider);
 
     final totalMeals = allMeals.valueOrNull?.length ?? 0;
     double totalCals = 0;
@@ -51,6 +58,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   .animate()
                   .fadeIn(duration: 500.ms, delay: 100.ms)
                   .slideY(begin: 0.1, end: 0),
+              const SizedBox(height: 12),
+              _buildEditNameButton(displayName)
+                  .animate()
+                  .fadeIn(duration: 500.ms, delay: 150.ms),
               const SizedBox(height: 20),
               _buildStatsRow(totalMeals, totalCals, streak)
                   .animate()
@@ -61,7 +72,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   .animate()
                   .fadeIn(duration: 500.ms, delay: 300.ms),
               const SizedBox(height: 12),
-              _buildSettingsList(dailyGoal)
+              _buildSettingsList(dailyGoal, reminders, theme)
                   .animate()
                   .fadeIn(duration: 500.ms, delay: 350.ms)
                   .slideY(begin: 0.05, end: 0),
@@ -220,6 +231,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  Widget _buildEditNameButton(String currentName) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        onPressed: () => _showEditNameSheet(currentName),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon: const Icon(
+          Icons.edit_outlined,
+          color: AppColors.cyan,
+          size: 14,
+        ),
+        label: const Text(
+          'Edit name',
+          style: TextStyle(
+            color: AppColors.cyan,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   String _initial(String name) {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return '?';
@@ -293,7 +331,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildSettingsList(int dailyGoal) {
+  Widget _buildSettingsList(
+    int dailyGoal,
+    MealRemindersSettings reminders,
+    ThemeVariant theme,
+  ) {
     return GlassCard(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
@@ -309,19 +351,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _buildSettingItem(
             icon: Icons.notifications_rounded,
             label: 'Meal Reminders',
-            trailing: 'Off',
+            trailing: _remindersTrailing(reminders),
             color: AppColors.cyan,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const MealRemindersScreen(),
+              ),
+            ),
           ),
           _buildDivider(),
           _buildSettingItem(
             icon: Icons.palette_rounded,
             label: 'Appearance',
-            trailing: 'Dark',
+            trailing: theme.label,
             color: AppColors.warning,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const AppearanceScreen(),
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _remindersTrailing(MealRemindersSettings r) {
+    return r.enabled ? 'On · 3 a day' : 'Off';
   }
 
   Widget _buildSettingItem({
@@ -527,6 +583,131 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showEditNameSheet(String currentName) {
+    final controller = TextEditingController(text: currentName);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 18),
+                decoration: BoxDecoration(
+                  color: AppColors.glassBorderBright,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                'Display name',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Shown on your profile and greeting.',
+                style: TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                ),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: AppColors.surfaceLight,
+                  hintText: 'Your name',
+                  hintStyle: const TextStyle(color: AppColors.textTertiary),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.glassBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.glassBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.cyan),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: AppColors.textTertiary),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () async {
+                        final value = controller.text.trim();
+                        if (value.isEmpty) return;
+                        try {
+                          await ref
+                              .read(profileRepositoryProvider)
+                              .updateGoals(displayName: value);
+                          ref.invalidate(profileProvider);
+                        } catch (_) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(
+                                content: Text("Couldn't save your name. Try again."),
+                              ),
+                            );
+                          }
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                      child: const Text(
+                        'Save',
+                        style: TextStyle(
+                          color: AppColors.emerald,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

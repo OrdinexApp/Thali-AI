@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../services/meal_reminders_controller.dart';
 import '../../../../services/providers.dart';
 import '../../../shell/main_shell.dart';
 import '../../../splash/presentation/screens/splash_screen.dart';
@@ -30,6 +31,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     super.initState();
     _splashTimer = Timer(AuthGate.splashMinDuration, () {
       if (mounted) setState(() => _splashDone = true);
+    });
+    // Re-apply persisted meal reminders on app launch so the OS schedule
+    // matches user settings even after device reboots / timezone shifts.
+    Future.microtask(() {
+      ref.read(mealRemindersControllerProvider.notifier).apply();
     });
   }
 

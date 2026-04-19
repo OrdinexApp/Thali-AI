@@ -1,18 +1,22 @@
 import 'dart:math';
-import 'package:flutter/material.dart';
-import '../constants/app_colors.dart';
 
-class AnimatedGradientBackground extends StatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../services/theme_controller.dart';
+
+class AnimatedGradientBackground extends ConsumerStatefulWidget {
   final Widget child;
 
   const AnimatedGradientBackground({super.key, required this.child});
 
   @override
-  State<AnimatedGradientBackground> createState() =>
+  ConsumerState<AnimatedGradientBackground> createState() =>
       _AnimatedGradientBackgroundState();
 }
 
-class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
+class _AnimatedGradientBackgroundState
+    extends ConsumerState<AnimatedGradientBackground>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
@@ -33,18 +37,17 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
 
   @override
   Widget build(BuildContext context) {
+    final variant = ref.watch(themeControllerProvider);
+
     return Stack(
       children: [
-        Container(
-          decoration: const BoxDecoration(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF07070D),
-                Color(0xFF0B0B16),
-                Color(0xFF070712),
-              ],
+              colors: variant.backgroundGradient,
             ),
           ),
         ),
@@ -52,7 +55,7 @@ class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
           listenable: _controller,
           builder: (context, _) {
             return CustomPaint(
-              painter: _GlowPainter(_controller.value),
+              painter: _GlowPainter(_controller.value, variant.glowColors),
               size: Size.infinite,
             );
           },
@@ -78,21 +81,22 @@ class AnimatedBuilder2 extends AnimatedWidget {
 
 class _GlowPainter extends CustomPainter {
   final double progress;
+  final List<Color> glowColors;
 
-  _GlowPainter(this.progress);
+  _GlowPainter(this.progress, this.glowColors);
 
   @override
   void paint(Canvas canvas, Size size) {
     final p1 = Paint()
-      ..color = AppColors.emerald.withValues(alpha: 0.055)
+      ..color = glowColors[0].withValues(alpha: 0.055)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 120);
 
     final p2 = Paint()
-      ..color = AppColors.cyan.withValues(alpha: 0.035)
+      ..color = glowColors[1].withValues(alpha: 0.035)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 140);
 
     final p3 = Paint()
-      ..color = AppColors.violet.withValues(alpha: 0.04)
+      ..color = glowColors[2].withValues(alpha: 0.04)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 160);
 
     final x1 = size.width * (0.15 + 0.25 * sin(progress * 2 * pi));
@@ -111,5 +115,6 @@ class _GlowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _GlowPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.progress != progress ||
+      oldDelegate.glowColors != glowColors;
 }
