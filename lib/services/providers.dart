@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../features/auth/data/auth_repository.dart';
 import '../features/history/data/models/meal_model.dart';
@@ -237,7 +238,7 @@ class AnalysisNotifier extends StateNotifier<AnalysisState> {
     state = const AnalysisState(status: AnalysisStatus.loading);
 
     try {
-      final mealId = DateTime.now().millisecondsSinceEpoch.toString();
+      final mealId = const Uuid().v4();
       final result = await _geminiService.analyzeThaliImage(
         imagePath: imagePath,
         mealId: mealId,

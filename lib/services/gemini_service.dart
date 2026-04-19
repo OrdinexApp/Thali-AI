@@ -439,7 +439,12 @@ Important:
             ],
             'generationConfig': {
               'temperature': 0.3,
-              'maxOutputTokens': 4096,
+              // Big enough for ~15 items + macros + insights. 4096 was too
+              // tight for full thali plates and led to truncated JSON.
+              'maxOutputTokens': 8192,
+              // Force the model to return a single JSON object instead of
+              // markdown-fenced text. Removes a whole class of parse errors.
+              'responseMimeType': 'application/json',
             }
           }),
         )
@@ -447,8 +452,17 @@ Important:
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
+      final candidate = data['candidates']?[0];
+      final finishReason = candidate?['finishReason'] as String?;
       final text =
-          data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String?;
+          candidate?['content']?['parts']?[0]?['text'] as String?;
+
+      // Treat truncation as a transient failure so _callWithRetry can try
+      // again. Returning the partial text would explode in jsonDecode.
+      if (finishReason == 'MAX_TOKENS') {
+        debugPrint('[AI] response hit MAX_TOKENS; treating as retryable');
+        return null;
+      }
       return text;
     }
 
@@ -500,7 +514,15 @@ Important:
       cleaned = cleaned.substring(start, end + 1);
     }
 
-    return jsonDecode(cleaned) as Map<String, dynamic>;
+    try {
+      return jsonDecode(cleaned) as Map<String, dynamic>;
+    } on FormatException catch (e) {
+      // Most often this means the upstream cut off mid-stream. Surface a
+      // clearer reason so logs are actionable instead of "unexpected end".
+      throw FormatException(
+        'Model returned malformed or truncated JSON (${e.message}).',
+      );
+    }
   }
 
   MealAnalysis _parseNutritionResponse(

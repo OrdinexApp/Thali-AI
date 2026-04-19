@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../services/image_upload_service.dart';
@@ -36,23 +37,37 @@ class SupabaseMealRepository implements MealRepository {
           localPath: localPath,
           mealId: meal.id,
         );
-      } catch (_) {
+      } catch (e, st) {
         // Image upload is best-effort: still save the nutrition row so the
         // user's calorie history stays accurate.
+        debugPrint('[SaveMeal] image upload failed (continuing without photo): $e');
+        debugPrintStack(stackTrace: st, label: '[SaveMeal][upload]');
         storagePath = null;
       }
     }
 
-    await _client.from('meals').insert(
-          meal.toMealRow(userId: uid, imageStoragePath: storagePath),
-        );
+    try {
+      await _client.from('meals').insert(
+            meal.toMealRow(userId: uid, imageStoragePath: storagePath),
+          );
+    } catch (e, st) {
+      debugPrint('[SaveMeal] meals insert failed: $e');
+      debugPrintStack(stackTrace: st, label: '[SaveMeal][meals]');
+      rethrow;
+    }
 
     if (meal.items.isNotEmpty) {
       final itemRows = <Map<String, dynamic>>[];
       for (var i = 0; i < meal.items.length; i++) {
         itemRows.add(meal.items[i].toItemRow(mealId: meal.id, sortOrder: i));
       }
-      await _client.from('meal_items').insert(itemRows);
+      try {
+        await _client.from('meal_items').insert(itemRows);
+      } catch (e, st) {
+        debugPrint('[SaveMeal] meal_items insert failed: $e');
+        debugPrintStack(stackTrace: st, label: '[SaveMeal][items]');
+        rethrow;
+      }
     }
   }
 

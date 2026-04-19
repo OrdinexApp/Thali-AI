@@ -708,7 +708,9 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
         ),
       );
       Navigator.popUntil(context, (route) => route.isFirst);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[SaveMeal] failed: $e');
+      debugPrintStack(stackTrace: st, label: '[SaveMeal]');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

@@ -108,23 +108,28 @@ class FoodItemTile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      // Use Wrap so long portion lines + style chip do not overflow
+                      // narrow Android widths (debug builds paint yellow/black stripes).
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (item.portion != null) ...[
+                          if (item.portion != null)
                             Text(
                               item.portion!,
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textTertiary,
+                                height: 1.25,
                               ),
                             ),
-                          ],
-                          if (item.cookingStyle != null) ...[
-                            if (item.portion != null)
-                              const SizedBox(width: 8),
+                          if (item.cookingStyle != null)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: styleColor.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6),
@@ -132,8 +137,11 @@ class FoodItemTile extends StatelessWidget {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(_getStyleIcon(item.cookingStyle),
-                                      size: 10, color: styleColor),
+                                  Icon(
+                                    _getStyleIcon(item.cookingStyle),
+                                    size: 10,
+                                    color: styleColor,
+                                  ),
                                   const SizedBox(width: 3),
                                   Text(
                                     item.cookingStyle!,
@@ -146,7 +154,6 @@ class FoodItemTile extends StatelessWidget {
                                 ],
                               ),
                             ),
-                          ],
                         ],
                       ),
                     ],
